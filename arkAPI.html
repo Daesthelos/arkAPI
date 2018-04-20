@@ -301,6 +301,16 @@ function Observable(observer){
   
   return Object.create(publisher, externalInterface);
 }
+function Observe(primitive){
+  if(!(this instanceof Observe)){
+	throw new Error('Observe is a constructor and must be called with the new keyword.');
+  }
+  var _primitive = primitive,
+	  publisher = new Publisher(),
+      externalInterface = function(){
+	  
+	  };
+}	
 /*
 function observe(primitive) {
     var self = this,
