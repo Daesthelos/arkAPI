@@ -1,0 +1,999 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>Ark: Survival Evolved News & Server Info</title>
+<link rel="icon" href="https://fiberblade.net/Assets/img/ark-survival-evolved.png" />
+<meta />
+<style>
+*{
+  vertical-align:top;
+}
+body {
+  margin:0;
+  padding:0;
+  color: white;
+  background-color:rgb(45,48,55);
+  font-family: "Times New Roman", Georgia, Serif;//Garamond
+}
+label:after{
+  content: ": ";
+}
+.grid *{
+  box-sizing:border-box;
+}
+.row{
+  width:100%;
+  display:block;
+}
+[class*='col-']{
+  display: inline-block;
+  padding:1px;
+}
+.col-1-3{ width: 33%;}
+.col-2-3{ width: 66%;}
+.col-1-2{ width: 50%;}
+.col-1-4{ width: 25%;}
+.col-3-4{ width: 75%;}
+.col-1-8{ width: 12.5%;}
+.col-3-8{ width: 37.5%;}
+.col-5-8{ width: 62.5%;}
+.col-7-8{ width: 87.5%;}
+.col-1-5{ width: 20%;}
+.col-2-5{ width: 40%;}
+.col-3-5{ width: 60%;}
+.col-4-5{ width: 80%;}
+
+.content{
+  
+}
+.left-margin-25{
+  margin-left:25%;
+}
+/*Masthead*/
+.masthead{
+  border-bottom: 1px solid white;
+  background-color:rgb(32,35,42);
+}
+.masthead > div{
+  vertical-align: middle;
+}
+.title h1{
+  font-size:1.7em;
+  text-align:center;
+  margin:auto;
+  padding:0;
+}
+.subtitle{
+  border-bottom:1px solid white;
+}
+
+/*Navigation*/
+.navigation{
+
+}
+.navigation > ul.nav-list{
+  margin:0;
+  padding:10px 10px 15px 10px;
+}
+.navigation > ul.nav-list > li{
+  display:inline;
+  border:1px solid black;
+}
+.navigation .nav-item{
+  color: rgb(30,30,30);
+  background-color: white;
+  text-decoration:none;
+  text-align:center;
+  display:inline-block;
+  cursor:pointer;		
+}
+ul.nav-list > li > a.nav-item:hover{
+  background-color: rgb(220,220,220);
+}
+#versionDetails > div{
+padding: 10px 10px 10px 10px;
+}
+
+/*Content*/
+
+h2{
+  width:100%;
+  text-align:center;
+  border-bottom:1px solid white;
+}
+
+/*ul>li:nth-child(n+1){
+  border-bottom:1px solid black;
+}*/
+
+.findServer{
+  vertical-align:bottom;
+}
+.findServer-container{
+  float:right;
+}
+#hosts{
+  height: 270px;
+  overflow-y:auto;
+  border: 1px solid white;
+  border-radius: 5px;
+  padding:0;
+}
+#hosts li.selected{
+  background-color: rgb(110,110,170);
+}
+#serverInfo a:link, #serverInfo a:visited {
+  color: GreenYellow;
+  text-decoration:none;
+}
+#serverInfo a[href]:hover{
+  text-decoration:underline;
+}
+#maps{
+  margin:0;
+  padding:0;
+}
+#gameModes{
+  margin:0;
+  padding:0;
+}
+#maps > li{
+  display:inline-block;
+}
+#gameModes > li{
+  display:inline-block;
+}
+input[type='checkbox'] + label:after{
+  content: "";
+}
+
+.hidden {
+  display:none;
+}
+
+.loadingSpan { float:right; }
+.loadingSpan.loading::before{
+  content: "Loading...";
+}
+.loadingSpan.done::before{
+  content: "Done";
+}
+a[href*="https://www.000webhost.com/"]{
+    display:none;
+}
+</style>
+</head>
+<body>
+<script>
+var ajax = (()=>{
+  var isJSON = (str) => { 
+    var output = {isValid:true, value:str};
+	try 	  { output.value = JSON.parse(str);}
+	catch (e) { output.isValid = false; }
+	return output;
+  };  
+  var unwrap = (obj) => {
+    if(typeof obj != 'object'){ return obj;}
+	return (()=>{ 
+	  var rewrite = {};
+	  Object.keys(obj).forEach(x=> rewrite[x] = obj[x]);
+	  return rewrite;
+	})();
+  };
+  var compress = (xhr) => { 
+	return {
+	  value : xhr.response,
+	  status: xhr.stauts,
+	  statusText: xhr.statusText
+	};
+  };
+  var parseXHR = (xhr,ref) => {
+    xhr = unwrap(xhr);
+	xhr.response = isJSON(ref.response).value;
+	xhr.responseText = isJSON(ref.responseText).value;
+	return xhr;
+  };
+  
+  //Todo: refactor into something that accepts an ajax options object.
+  var send = (method,url,data,headers,async) => {
+    return new Promise((resolve, reject) => {
+	  var xhr = new XMLHttpRequest();
+	  xhr.onload = function(){
+	      xhr = compress(parseXHR(xhr,this));
+		  (this.status >= 200 && this.status < 300) ? resolve(xhr) : reject(xhr);
+	  };
+	  async = (async == undefined) ? true : async;
+	  xhr.onerror = () => { reject(this); };
+	  xhr.open(method,url,async);
+	  if(headers && Array.isArray(headers)){ headers.forEach(x=> xhr.setRequestHeader(x.header,x.value)); }
+	  xhr.send(data);
+	});
+  };
+  
+  return {
+    get : function(url){ return send("GET",url); },
+	//put(url,data) { return send("PUT",url); },
+	post: function(url,data,headers){ return send("POST",url,data,headers); }
+	//'delete' : (url) => { return send("DELETE",url); }
+  };
+})();
+function Publisher(){
+  if(!(this instanceof Publisher)){
+    throw new Error('Publisher is a constructor and must be called with the new keyword.');
+  }
+  
+  var actionEvents = {};
+  
+  var subscribe = (actionEvent, subscriber) => {
+    if(actionEvent == null){ throw new Error('Action event must be specified.'); }
+	else if(subscriber == null) { throw new Error('Subscription function must be specified.'); }
+	else if(typeof actionEvent != "string"){ throw new TypeError('Action event must be a string.'); }
+	else if(typeof subscriber != 'function'){ throw new TypeError('Subscriber must be of type function.'); }
+	
+	if(actionEvents[actionEvent] == null){
+	  actionEvents[actionEvent] = [];
+	}
+	
+	var index = actionEvents[actionEvent].push(subscriber) - 1;
+	return { index : index };		
+  }
+  
+  var unsubscribe = (actionEvent, index) => {
+    if(actionEvents[actionEvent] != null && isFinite(index)){
+	  try {
+	    delete actionEvents[actionEvent][index];
+	  } catch(e) {
+	    throw new Error("Error occured while unsubscribing.");
+	  }
+	} else {
+	  throw new Error("Action event does not exist or index is out of range.");
+	}
+  }
+  
+  function publish(actionEvent, eventInfo){
+    if(actionEvent == null){ throw new Error('Action event must be specified.'); }
+	else if(typeof actionEvent != "string"){ throw new TypeError('Action event must be a string.'); }
+	
+    if(actionEvents[actionEvent] != null){
+	  actionEvents[actionEvent].forEach((subscriber)=> subscriber(eventInfo) );
+	}
+  }
+  
+  this.subscribe = subscribe;
+  this.unsubscribe = unsubscribe;
+  this.publish = publish;
+}
+
+function Observable(observer){
+  if(!(this instanceof Observable)){
+    throw new Error('Observable is a constructor and must be called with the new keyword.');
+  }
+  
+  var publisher = new Publisher(),
+      _observable = this;
+
+  var setPrivateValue = (property, value) => {
+    this['_' + property] = value;
+  }
+  var getPrivateValue = (property) => {
+    return this['_' + property];
+  }
+  
+  var externalInterface = {};
+  Object.keys(observer).forEach((key)=>{
+    setPrivateValue(key, observer[key]);
+	externalInterface[key] = {
+	  get(){ return getPrivateValue(key); },
+	  set(value){
+	    var oldValue = getPrivateValue(key);
+	    if(oldValue != value){
+		  var args = {
+		    'old' : oldValue,
+			'new' : value,
+		  };
+		  setPrivateValue(key, value);
+		  publisher.publish("change/" + key, args);
+		  publisher.publish('change', args);
+		}
+	  }
+	};
+  });
+  
+  return Object.create(publisher, externalInterface);
+}
+</script>
+
+<div class='masthead row grid'>
+<div class="col-1-5 title">
+<div class="row"><h1>Ark Survival: Evolved</h1></div>	
+</div><!--
+--><div class="col-3-5">
+<div class='navigation row'>
+	<ul class="nav-list">
+		<li><span class ='nav-item col-1-3' data-index='0'>News & Server Status</span></li><!--
+		--><li><span class ='nav-item col-1-3' data-index='1'>Server Listing</span></li><!--
+		--><li><span class ='nav-item col-1-3' data-index='2'>Server Info</span></li>
+    </ul>
+</div>
+</div><!--
+--><div id="versionDetails" class="col-1-5">
+<div class="row">
+	<div class="row">
+		<strong><span class="col-1-2">Major Version:</span><!--
+		--><span class="col-1-2"><a id='majorVersion'>---</a></span></strong>
+	</div>
+	<div class="row">
+		<strong><span class="col-1-2">Version:</span><!--
+		--><span class="col-1-2"><a id='version'>---</a></span></strong>
+	</div>
+</div>
+</div>
+
+</div>
+
+<div class='contentMain grid'>
+	<div class="row tab" data-index="0"><!-- temporary so i can design the host/server detail view-->
+	<div class="content col-1-2 left-margin-25">
+		<h2>Server Status</h2>
+		<div id="serverStatus"><!-- foreach item in statusInfo, <p> -->
+		</div>
+	</div>
+    <div class="content col-1-2 left-margin-25">
+		<h2>News</h2>
+		<div id="news"><!-- foreach item in statusInfo, <p> -->
+		</div>
+	</div>
+	</div>
+	<div class="row tab" data-index="1">
+		<div class="col-1-2 left-margin-25">
+			<h2>Server List 
+				<span class='loadingSpan'></span>
+			</h2>
+			<div class="row">
+			<h4 class="subtitle">Maps</h4>
+			<ul id="maps">
+			<li><input id="a" type="checkbox" value="TheIsland" /><label for="a">The Island</label></li>
+			<li><input id="b" type="checkbox" value="TheCenter" /><label for="b">The Center</label>	</li>
+			<li><input id="c" type="checkbox" value="Ragnarok"/><label for="c">Ragnarok</label></li>
+			<li><input id="d" type="checkbox" value="PGARK" /><label for="d">Procedural</label></li>
+			<li><input id="e" type="checkbox" value="ScorchedEarth" /><label for="e">Scorched Earth</label></li>
+			<li><input id="f" type="checkbox" value="Aberration" /><label for="f">Abberation</label></li>
+			</ul>
+			</div>
+			<div class="row">
+			 <div class="col-1-2">
+			  <h4 class="subtitle">Game Modes</h4>
+			  <ul id="gameModes">
+			  <li><input id="g" type="checkbox" value="pvp" /><label for="g">PVP</label></li>
+			  <li><input id="h" type="checkbox" value="pve" /><label for="h">PVE</label></li>
+			  <li><input id="i" type="checkbox" value="noTame" /><label for="i">No Tame</label></li>
+			  </ul>
+			 </div><!--
+			--><div class="col-1-2 findServer">
+			    <div class="findServer-container">
+			    <label for='txtFind'>Search</label><input id='txtFind' type='text'>	
+			   </div>
+			 </div>
+			</div>			
+			<ul id="hosts"></ul><!-- foreach server in servers, <li> -->
+			</div><!--
+		-->
+	</div>
+	<div class="row tab" data-index="2">
+		 <div class="col-1-2 left-margin-25">
+			<h2>Server Info</h2>		
+			<div id='serverInfo'>
+				<table>
+				<tr>
+					<td>Server Name</td><td id='serverName' data-prop="name">--</td>
+				</tr>
+				<tr>
+					<td>Map</td><td id='map' data-prop="map">--</td>
+				</tr>
+				<tr>
+					<td>Is PVP</td><td id='isPvP' data-prop="isPVP">--</td>
+				</tr>
+				<tr>
+					<td>Day Time</td><td id='daytime' data-prop="time">--</td>
+				</tr>
+				<tr>
+					<td>Official Server</td><td id='isOfficial' data-prop="isOfficial">--</td>
+				</tr>
+				<tr>
+					<td>Uses BattleEye</td><td id='usesBattleEye' data-prop="hasBattleEye">--</td>
+				</tr>
+				<tr>
+					<td>Requires password</td><td id='passwordRequired' data-prop="hasPassword">--</td>
+				</tr>
+				<tr>
+					<td>Connect</td><td id='serverLink'><a href="#" id='connectLink' data-prop="address">--</a></td>
+				</tr>
+				
+				<tr>
+					<td>Player Count</td><td id='playerCount' data-prop="playerCount">--</td>
+				</tr>
+
+				<tr>
+					<td>Players</td><td id='players' data-prop="players">--</td>
+				</tr>
+				
+				<tr>
+					<td>Allows Player Downloads</td><td id='playerDownloadsAllowed' data-prop="hasCharacterDownloads">--</td>
+				</tr>
+				<tr>
+					<td>Allows Item Downloads</td><td id='itemDownloadsAllowed' data-prop="hasItemDownloads">--</td>
+				</tr>
+				<tr>
+					<td>Cluster ID</td><td id='clusterID' data-prop="clusterID">--</td>
+				</tr>
+				<tr>
+					<td>Timeout Length</td><td id='timeout' data-prop="timeout">--</td>
+				</tr>			
+				</table>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+var rsc = (function(){
+  var proxy = "https://cors-anywhere.herokuapp.com/",
+      routes = {
+	    version : "http://arkdedicated.com/version",
+	    majorVersion : "http://arkdedicated.com/version/major",
+	    serverStatus : "http://arkdedicated.com/officialserverstatus.ini",
+	    news : "http://arkdedicated.com/news.ini",
+	    hosts : "http://arkdedicated.com/officialservers.ini",
+		serverQuery : "https://api.xcausxn.com/v1/game/"
+      };
+	  
+   var utils = {	
+     regex : {
+		ip : /[\d]+\.[\d]+\.[\d]+\.[\d]+/g,
+		newlines : /\r\n/g,
+		tags : /<[^>]+>/g
+	 }
+	};
+	  
+  function getServerInfo(ip, config){
+	var cfg = config || {
+	  port : '27015',
+      game : 'arkse'
+	},
+	queryRoute = routes.serverQuery + 
+	             "?type=" + cfg.game + 
+				 "&port=" + cfg.port +
+				 "&host=" + ip;
+	return ajax.get(queryRoute);
+  }
+  
+  return {
+    version: function(){ return ajax.get(proxy + routes.version);} ,
+	majorVersion: function(){ return ajax.get(proxy + routes.majorVersion);},
+	serverStatus: function(){ return ajax.get(proxy + routes.serverStatus);},
+	news : function(){ return ajax.get(proxy + routes.news);},
+	hosts: function(){ return ajax.get(proxy + routes.hosts);},
+	serverInfo : getServerInfo,
+	utils : utils
+  };
+})();
+
+(function(){
+  //Page load
+  var tabs = Array.from(document.querySelectorAll(".tab"));
+  tabs.forEach(x=> x.classList.add("hidden"));
+  tabs[0].classList.remove("hidden");
+})();
+
+var model = new Observable({
+  version : 0,
+  news : "",
+  serverStatus : "",
+  hosts : [],
+});
+Object.defineProperty(model, 'majorVersion', {get(){ return parseInt(this.version).toFixed(0); }}); //Can only retrieve initial version of version otherwise, for some reason.
+
+var Server = function(configuration = {}){
+  if(!(this instanceof Server)){
+    throw new Error("Server is a constructor and must be called with the new keyword.");
+  }
+  
+  var setDefault = (val, defaultValue) => { return val === undefined ? defaultValue : val; }
+  var server = {
+  	name : setDefault(configuration.name, "---"),
+	get address(){ return "---"; },
+	hasPassword : setDefault(configuration.map, "---"),
+    map : setDefault(configuration.map, "---"),
+	playerCount : (configuration.hasOwnProperty('players')) ? configuration.players.length : "---",
+	maxPlayers : setDefault(configuration.maxplayers, "---"),
+	players : setDefault(configuration.players, "---"),
+	rules : {
+	  hasCharacterDownloads : "---",
+	  hasItemDownloads : "---",
+	  clusterID : "---",
+	  time : "---",
+	  isLegacy : "---",
+	  timeout : "---",
+	  mods: "---",
+	  isOfficial : "---",
+	  hasBattleEye : "---",
+	  isPvP : "---",
+	},
+  };
+  
+  if(configuration.hasOwnProperty('query') && configuration.query.address && configuration.query.port){
+    Object.defineProperty(server,'address',{ get(){ return configuration.query.address + ":" + configuration.query.port; }});
+  }
+  
+  if(configuration.hasOwnProperty("raw") && configuration.raw.hasOwnProperty("rules")){
+    var configRules = configuration.raw.rules;
+	if(configRules.hasOwnProperty('ALLOWDOWNLOADCHARS_i')){ server.rules.hasCharacterDownloads = Boolean(configRules.ALLOWDOWNLOADCHARS_i);}
+	if(configRules.hasOwnProperty('ALLOWDOWNLOADITEMS_i')){ server.rules.hasItemDownloads      = Boolean(configRules.ALLOWDOWNLOADITEMS_i);}
+	if(configRules.hasOwnProperty('ClusterId_s'))		  { server.rules.clusterID		       = configRules.ClusterId_s;}
+	if(configRules.hasOwnProperty('DayTime_s'))		  	  { server.rules.time 				   = Number(configRules.DayTime_s);}
+	if(configRules.hasOwnProperty('LEGACY_i'))		  	  { server.rules.isLegacy 			   = Boolean(configRules.LEGACY_i);}
+	if(configRules.hasOwnProperty('ModId_l'))		  	  { server.rules.mods 				   = configRules.ModId_l;}
+	if(configRules.hasOwnProperty('OFFICIALSERVER_i'))	  { server.rules.isOfficial 		   = Boolean(configRules.OFFICIALSERVER_i);}
+	if(configRules.hasOwnProperty('SERVERUSESBATTLEYE_b')){ server.rules.hasBattleEye 		   = configRules.SERVERUSESBATTLEYE_b;}
+	if(configRules.hasOwnProperty('SESSIONISPVE_i'))	  { server.rules.isPvP 				   = !Boolean(configRules.SESSIONISPVE_i);}
+  }
+  
+  return server;
+};
+
+(function(){
+ 
+  var _vm = new Observable({
+    tabID : 0,
+	serverID : 0,
+  });
+  
+  var ui = {
+    navItems : document.querySelectorAll('.nav-item[data-index]'),
+	tabs : document.querySelectorAll('.tab[data-index]'),
+	version : document.querySelector('#version'),
+	majorVersion : document.querySelector('#majorVersion'),
+	serverStatus : document.querySelector('#serverStatus'),
+	news : document.querySelector('#news'),
+	serverInfo : {
+	  name : document.querySelector('#serverName'),
+	  clusterID : document.querySelector('#clusterID'),
+	  serverLink : document.querySelector('#serverLink'),
+	  hasPassword : document.querySelector('#passwordRequired'),
+	  map : document.querySelector('#map'),
+	  isPvP : document.querySelector('#isPvP'),
+	  isOfficial : document.querySelector('#isOfficial'),
+	  hasBattleEye : document.querySelector('#usesBattleEye'),
+	  playerCount : document.querySelector('#playerCount'),
+	  players : document.querySelector('#players'),
+	  hasCharacterDownloads : document.querySelector('#playerDownloadsAllowed'),
+	  hasItemDownloads : document.querySelector('#itemDownloadsAllowed'),
+	  time : document.querySelector('#daytime'),
+	  timeout : document.querySelector('#timeout'),
+	},
+  };
+  
+  _vm.subscribe('change/tabID', (tabID) => displayTab(tabID.new));
+  _vm.subscribe('change/serverID', (serverID) => displayServerInfo(serverID.new));
+  
+  model.subscribe('change/version', (version) => updateVersion(version.new));
+  model.subscribe('change/news', (news) => {});
+  model.subscribe('change/serverStatus', (serverStatus) => {});
+  
+  //UI events
+  var changeTabIndex = () => {  _vm.tabID = this.dataset.index; };
+  
+  Array.from(ui.tabs).forEach((tab) => tab.onclick = changeTabIndex);
+  
+  //VM events
+  var displayTab = (tabID) => {
+    var tabs = Array.from(ui.tabs),
+	    selectedTab = tabs.find((tab)=> tab.dataset.index == tabID);
+    if(selectedTab){
+	  tabs.forEach((tab)=> tab.classList.add('hidden'));
+	  selectedTab.classList.remove('hidden');
+	}	
+  };
+  var displayServerInfo = (serverID) => {
+    var server = model.hosts.find((server) => server.name == serverID)
+    if(server){  
+	  Object.keys(server).forEach((key) => {
+	    function mapData(prop, data){
+	      document.querySelector(`[data-prop=${prop}]`).innerText = data;	  
+	    }
+	    if(key === 'rules'){
+	      Object.keys((server.rules)).forEach((rule) => { mapData(rule, server.rules[rule]); });
+	    } else {
+	      mapData(key, server[key]);
+	    }
+	  });
+	  	  
+	  _vm.tabID = 2;
+	} else {
+	  throw new Error("Server not found.");
+	}
+  }
+  var updateVersion = (version) => {
+    ui.version.innerText = version;
+	ui.majorVersion.innerText = parseInt(version).toFixed(0);
+  };
+  
+  var vm = {
+    nav : {
+	  items : Array.from(document.querySelectorAll(".nav-item"))
+	},
+	tabs : {
+	  items : Array.from(document.querySelectorAll(".tab[data-index]"))
+	},
+    majVersion : {
+	  ui : document.getElementById("majorVersion")
+	},
+	version : {
+	  ui : document.getElementById("version")
+	},
+	serverStatus : {
+	  ui : document.getElementById("serverStatus"),
+	  addStatus : function(status){
+	     var p = document.createElement("p");
+		 p.innerText = status;
+		 vm.serverStatus.ui.appendChild(p);
+	  },
+	},
+	filter : {
+	  conditions : [],
+	  add : function(condition){
+	    vm.filter.conditions.push(condition);
+		vm.hosts.reloadServers(vm.filter.get());
+	  },
+	  get : function(){
+	  	var mapFilters = vm.filter.conditions.filter(x=> x.type == "map"),
+		    modeFilters = vm.filter.conditions.filter(x=> x.type == "mode"),
+			shallowServers = vm.data.servers.slice();
+		
+		if(mapFilters.length){
+		  mapFilters = mapFilters.map(x=> x.value);
+		  shallowServers = shallowServers.filter(x=> mapFilters.includes(x.map));
+		}
+		if(modeFilters.length){
+		  var noTameServers = [],
+		      pvpServers = [],
+			  pveServers = [],
+			  filteredServers = [];
+			  
+		  modeFilters = modeFilters.map(x=> x.value);
+		  
+		  if(modeFilters.includes("noTame")){
+		    noTameServers = shallowServers.filter(x=> x.name.includes("NoTaming"));
+		  }
+		  if(modeFilters.includes("pvp")){
+		    pvpServers = shallowServers.filter(x=> { return (x.name.includes("PVP") || !x.rules.isPvE); });
+		  }
+		  if(modeFilters.includes("pve")){
+		    pveServers = shallowServers.filter(x=> { return (x.name.includes("PVE") || x.rules.isPvE); })
+		  }
+		  
+		  filteredServers = noTameServers.concat(pvpServers).concat(pveServers);
+		  filteredServers = filteredServers.reduce((x,y)=> { 
+			var keys = x.map(z=>z.name);
+			
+			if(!keys.includes(y.name)){ x.push(y); } return x; 
+		  } ,[]);	  
+		  var keys = filteredServers.map(x=> x.name);
+		  shallowServers =  shallowServers.filter(x=> keys.includes(x.name) );
+		}
+		if(vm.filter.conditions.filter(x=> x.type == "custom").length){
+		  var condition = vm.filter.conditions.filter(x=> x.type == "custom")[0];
+		  shallowServers = shallowServers.filter(x=> x.name.toUpperCase().includes(condition.value.toUpperCase()));
+		}
+		
+		return shallowServers;
+	  },
+	  remove : function(condition, isCustom){  
+
+	    var item = vm.filter.conditions.find(x=> x.value == condition);
+		if(item){
+		  var idx = vm.filter.conditions.map(x=> x.value).indexOf(item.value);
+		  vm.filter.conditions.splice(idx,1);
+		}
+		
+		if(isCustom){
+		  var search = vm.filter.conditions.find(x=> x.type == "custom");
+		  if(search){
+		    var idx = vm.filter.conditions.map(x=> x.type).indexOf("custom");
+		    vm.filter.conditions.splice(idx,1); 
+		  }
+		}
+		
+		if(!vm.filter.conditions.length){
+		  vm.hosts.reloadServers();
+		} else {
+		  vm.hosts.reloadServers(vm.filter.get());
+		}
+	  },
+	  test : function(server){
+	    var conditions = vm.filter.conditions;
+			
+	    //I'm having a hard time with this
+		if(conditions.filter(x=> x.type == "custom").length){
+		  var condition = conditions.filter(x=> x.type == "custom")[0];
+		  if(server.name.toUpperCase().includes(condition.value.toUpperCase())){
+		    return true;
+		  }
+		}	
+			
+		var maps = conditions.filter(x=> x.type == "map");
+		if(maps.length){
+		  maps = maps.map(x=> x.value);
+		  if(maps.includes(server.map)){ return true;}
+		}
+		
+		var modes = conditions.filter(x=> x.type == "mode");
+		if(modes.length){
+		  modes = modes.map(x=> x.value);
+		  if(modes.includes("noTame") && server.name.includes("NoTaming")){ return true; }
+		  if(modes.includes("pve") && (server.rules.isPvE == "---" || server.rules.isPvE)){ return true; }
+		  if(modes.includes("pvp") && (server.rules.isPvE == "---" || !server.rules.isPvE)){ return true; }
+		}
+		
+		return false;
+	  }
+	},
+	hosts : {
+	  ui : document.getElementById("hosts"),
+	  addServer : function(server){
+	    var li = document.createElement("li");
+		li.dataset.name = server.name;
+		li.innerText = server.name;
+		li.onclick = displayServerInfo;
+		
+		if(vm.filter.conditions.length){
+		  if(!vm.filter.test(server)){
+		    return;
+		  }
+		}
+		
+		//Do index based insertion if children
+		if(vm.hosts.ui.children.length){
+		  var serverNames = vm.data.servers.map(function(s){ return s.name });
+		  var idx = serverNames.indexOf(server.name);
+		  //Error: server not found or last item
+		  if(idx == -1 || idx == serverNames.length - 1){
+		    vm.hosts.ui.appendChild(li);
+		  } else {
+		    var liServers = Array.from(vm.hosts.ui.children);
+			var elAfter = liServers.find(x=> x.dataset.name == serverNames[idx+1]);
+		    vm.hosts.ui.insertBefore(li, elAfter);
+		  }
+		} else {
+		  vm.hosts.ui.appendChild(li);
+		}
+	  },
+	  reloadServers : function(servers){
+	    vm.hosts.ui.innerHTML = "";
+		if(servers){
+		  servers.forEach(x=> vm.hosts.addServer(x));
+		} else {
+		  vm.data.servers.forEach(x=> vm.hosts.addServer(x));
+		}
+	  },
+	},
+	news : {
+	  ui : document.getElementById("news"),
+	  addNewsItem : function(newsItem){
+	     var p = document.createElement("p");
+		 p.innerText = newsItem;
+		 vm.news.ui.appendChild(p);
+	  },
+	},
+	serverInfo : {
+	  ui : document.getElementById("serverInfo"),
+	  fields : (function(form){		  
+		  return {
+		    name : form.find(x=> x.id == "serverName"),
+			map  : form.find(x=> x.id == "map"),
+			isPvP: form.find(x=> x.id == "isPvP"),
+			time : form.find(x=> x.id == "daytime"),
+			isOfficial : form.find(x=> x.id == "isOfficial"),
+			hasBattleEye : form.find(x=> x.id == "usesBattleEye"),
+			hasPassword  : form.find(x=> x.id == "passwordRequired"),
+			link : form.find(x=> x.id == "serverLink").querySelector("#connectLink"),
+			playerCount  : form.find(x=> x.id == "playerCount"),
+			players : form.find(x=> x.id == "players"),
+			hasCharacterDownloads : form.find(x=> x.id == "playerDownloadsAllowed"),
+			hasItemDownloads : form.find(x=> x.id == "itemDownloadsAllowed"),
+			clusterID : form.find(x=> x.id == "clusterID"),
+			timeout : form.find(x=> x.id == "timeout")
+		  };
+		})(Array.from(document.getElementById("serverInfo").querySelectorAll("td[id]"))),
+	  display : function(server){
+	    var uiFields = vm.serverInfo.fields;
+		
+		uiFields.name.innerText = server.name;
+		uiFields.map.innerText = server.map;
+		uiFields.isPvP.innerText = (server.rules.isPvE !== "---") ? !server.rules.isPvE : server.rules.isPvE;
+		uiFields.time.innerText = server.rules.time;
+		uiFields.isOfficial.innerText = server.rules.isOfficial;
+		uiFields.hasBattleEye.innerText = server.rules.hasBattleEye;
+		uiFields.hasPassword.innerText = server.hasPassword;
+	    uiFields.link.innerText = server.address;
+		uiFields.link.href = "steam://connect/" + server.address;
+		uiFields.playerCount.innerText = server.playerCount;
+		uiFields.hasCharacterDownloads.innerText = server.rules.hasCharacterDownloads;
+		uiFields.hasItemDownloads.innerText = server.rules.hasItemDownloads;
+		uiFields.clusterID.innerText = server.rules.clusterID;
+		uiFields.timeout.innerText = server.rules.timeout;
+		
+		//Currently a simple span. If plans to actually use, convert to list and parse items.
+		uiFields.players.innerText = "---";
+	  }
+	},
+	data : {
+	  servers : []
+	}
+  };
+  
+  function switchTab(){
+    if(this.dataset.hasOwnProperty('index')){
+      var idx = parseInt(this.dataset.index);
+	  var tab = vm.tabs.items.find(x=> x.dataset.index == idx);
+	  if(tab){
+	    vm.tabs.items.forEach(x=> x.classList.add("hidden"));
+	    tab.classList.remove("hidden");
+	  }
+    }
+  }
+  
+  function displayServerInfo(){
+    var id = this.dataset.name;
+	
+	Array.from(vm.hosts.ui.children).forEach(x=> x.classList.remove("selected"));
+	this.classList.add("selected");
+	
+	var server = vm.data.servers.find(x=> x.name == id);
+	if(server){
+	  vm.serverInfo.display(server);
+	}
+	
+	document.querySelector(".nav-item[data-index='2']").click();
+  }
+  
+  function batchLoad(serverList){
+    if(serverList.length == 0){ 
+	  document.querySelector(".loadingSpan").classList.remove("loading");
+	  document.querySelector(".loadingSpan").classList.add("done");
+	  return; 
+	}
+	
+    var server = serverList.shift();
+    rsc.serverInfo(server).then(x=>{
+	  var server = parseServer(x.value);
+	  
+	  vm.data.servers.push(server);
+	  vm.data.servers.sort((y,z) => y.name.localeCompare(z.name,"en-US-u-kn-true"));
+	  vm.hosts.addServer(server);
+	})
+	.catch(a=> {})
+	.then(b=> batchLoad(serverList));
+  }
+  
+  function parseServer(server){
+    var rules = {
+	  hasCharacterDownloads: "---",
+      hasItemDownloads: "---",
+      clusterID: "---",
+      time: "---",
+      isLegacy: "---",
+      timeout: "---",
+      mods: "---",
+      isOfficial: "---",
+      hasBattleEye: "---",
+      isPvE: "---"
+	};
+	
+    if(server.hasOwnProperty("raw") && server.raw.hasOwnProperty("rules")){	
+	  if(server.raw.rules.hasOwnProperty("ALLOWDOWNLOADCHARS_i")){ rules.hasCharacterDownloads = !!+server.raw.rules.ALLOWDOWNLOADCHARS_i;}
+	  if(server.raw.rules.hasOwnProperty("ALLOWDOWNLOADITEMS_i")){ rules.hasItemDownloads = !!+server.raw.rules.ALLOWDOWNLOADITEMS_i; }
+	  if(server.raw.rules.hasOwnProperty("ClusterId_s")){ rules.clusterID = server.raw.rules.ClusterId_s; }
+	  if(server.raw.rules.hasOwnProperty("DayTime_s")){ rules.time = +server.raw.rules.DayTime_s; }
+	  if(server.raw.rules.hasOwnProperty("LEGACY_i")){ rules.isLegacy = !!+server.raw.rules.LEGACY_i; }
+	  if(server.raw.rules.hasOwnProperty("MATCHTIMEOUT_f")){ rules.timeout = +server.raw.rules.MATCHTIMEOUT_f; }
+	  if(server.raw.rules.hasOwnProperty("ModId_l")){ rules.mods = server.raw.rules.ModId_l; }
+	  if(server.raw.rules.hasOwnProperty("OFFICIALSERVER_i")){ rules.isOfficial = !!+server.raw.rules.OFFICIALSERVER_i; }
+	  if(server.raw.rules.hasOwnProperty("SERVERUSESBATTLEYE_b")){ rules.hasBattleEye = server.raw.rules.SERVERUSESBATTLEYE_b; }
+	  if(server.raw.rules.hasOwnProperty("SESSIONISPVE_i")){ rules.isPvE = !!+server.raw.rules.SESSIONISPVE_i; }
+	}
+
+	if(server.name.includes("PVP")){ rules.isPvE = false; }
+	else if( server.name.includes("PVE")){ rules.isPvE = true; }
+	
+	return {
+	  map: server.map,
+	  maxPlayers: server.maxplayers,
+	  name : server.name,
+	  playerCount : server.players.length,
+	  players: server.players,
+	  address: (server.query.address + ":" + server.query.port),
+	  hasPassword : server.password || false,
+	  rules : rules
+	};
+  }
+   
+  //load 
+  vm.nav.items.forEach(x=> x.onclick = switchTab);
+  
+  function promiseTimer(promise, ms, message){ 
+    var timeout = new Promise((resolve,reject) => {
+		var id = setTimeout(()=> { 
+			clearTimeout(id);
+			reject(message || 'Timed out. ');
+		},ms); 
+	}); 
+	
+	return Promise.race([promise,timeout]);
+ }
+  
+  //Filter input event binding
+  (function(){
+    var mapFilters = Array.from(document.querySelectorAll("#maps input[type='checkbox']"));
+	mapFilters.forEach(x=> x.onclick = function(){
+	  if(this.checked){ vm.filter.add({type : "map", value : this.value}); }
+	  else{ vm.filter.remove(this.value); }
+	});
+	var modeFilters = Array.from(document.querySelectorAll("#gameModes input[type='checkbox']"));
+	modeFilters.forEach(x=> x.onclick = function(){
+	  if(this.checked){ vm.filter.add({type : "mode", value : this.value}); }
+	  else{ vm.filter.remove(this.value); }
+	});
+	document.getElementById("txtFind").oninput = function(e){
+	  var value = e.target.value;
+	  var condition = { type : "custom", value : value };
+	  
+	  vm.filter.remove(condition,true);
+	  vm.filter.add(condition);
+	}
+  })();
+
+  promiseTimer(rsc.version(), 60000, "Version info failed to load.")
+	.then(x=> vm.version.ui.innerText = x.value)
+	.catch(x=> {console.log(x); vm.version.ui.innerText = "unavailable"; });
+  promiseTimer(rsc.majorVersion(), 60000, "Major version info failed to load.")
+	.then(x=> vm.majVersion.ui.innerText = x.value)
+	.catch(x=> {console.log(x); vm.majVersion.ui.innerText = "unavailable"; });
+  
+  //Returns newline delimited data; needs to be parsed
+  promiseTimer(rsc.serverStatus(), 60000, "Server status failed to load.").then(x=> {
+    var serverStatus = x.value
+						.split(rsc.utils.regex.newlines)
+						.filter(y => y.trim() != "")
+						.map(z=> z.replace(rsc.utils.regex.tags, ""));
+
+	serverStatus.forEach(s=> vm.serverStatus.addStatus(s) );
+  }).catch(x=> {console.log(x); vm.serverStatus.addStatus("Server status unavailable."); });
+  
+  promiseTimer(rsc.news(), 60000, "News failed to load.").then(x=>{
+    var news = x.value
+				.split(rsc.utils.regex.newlines)
+				.filter(y => y.trim() != "")
+				.map(z=> z.replace(rsc.utils.regex.tags, ""));
+				
+				
+	news.forEach(n=> vm.news.addNewsItem(n) );
+  }).catch(x=> {console.log(x); vm.news.addNewsItem("News unavailable."); });
+  
+  promiseTimer(rsc.hosts(), 60000, "Host list failed to load.").then(x=>{
+    var hosts = x.value.split(rsc.utils.regex.newlines).map(y => {
+		if(y.match(rsc.utils.regex.ip)){
+		  return y.match(rsc.utils.regex.ip)[0];
+		} else {
+		  return null;
+		}
+	}).filter(z => z != null);
+	
+	document.querySelector(".loadingSpan").classList.add("loading");
+	batchLoad(hosts);
+  }).catch(x=> {console.log(x); alert("Server list unavailable."); });
+})();
+
+
+</script>
+</html>
