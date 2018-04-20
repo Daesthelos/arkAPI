@@ -301,6 +301,71 @@ function Observable(observer){
   
   return Object.create(publisher, externalInterface);
 }
+/*
+function observe(primitive) {
+    var self = this,
+        primitiveValue = primitive,
+        radio = {
+            topics: {},
+            on: function (topic, listener) {
+                var radio = this;
+                // Create the topic's object if not yet created
+                if (!radio.topics.hasOwnProperty(topic)) radio.topics[topic] = [];
+                // Add the listener to queue
+                var index = radio.topics[topic].push(listener) - 1;
+                // Provide handle back for removal of topic
+                return {
+                    remove: function () {
+                        delete radio.topics[topic][index];
+                    }
+                };
+            },
+            action: function (topic, info) {
+                var radio = this;
+                // If the topic doesn't exist, or there's no listeners in queue, just leave
+                if (!radio.topics.hasOwnProperty(topic)) return;
+                // Cycle through topics queue, fire!
+                radio.topics[topic].forEach(function (item) {
+                    item(info !== undefined ? info : {});
+                });
+            }
+        };
+
+
+
+    var observable = function (value) {
+        var self = this;
+        // set
+        if (value !== undefined) {
+            if (primitiveValue != value) {
+                var args = {
+                    'prop': self,
+                    'old': primitiveValue,
+                    'new': value
+                };
+                primitiveValue = value;
+                radio.action('change', args);
+            }
+        }
+        // get
+        return primitiveValue;
+    };
+
+    observable.on = function (event, callback) {
+        if (typeof event == 'function' && callback === undefined) {
+            callback = event;
+            event = 'change';
+        }
+        radio.on(event, callback);
+    };
+
+    observable.set = function (value) {
+        primitiveValue = value;
+    };
+
+    return observable;
+}
+*/	
 </script>
 
 <div class='masthead row grid'>
