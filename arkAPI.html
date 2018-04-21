@@ -603,6 +603,12 @@ var Server = function(configuration = {}){
   model.subscribe('change/version', (version) => updateVersion(version.new));
   model.subscribe('change/news', (news) => {});
   model.subscribe('change/serverStatus', (serverStatus) => {});
+  /*
+      var serverStatus = x.value
+						.split(rsc.utils.regex.newlines)
+						.filter(y => y.trim() != "")
+						.map(z=> z.replace(rsc.utils.regex.tags, ""));
+  */
   
   //UI events
   var changeTabIndex = () => {  _vm.tabID = this.dataset.index; };
