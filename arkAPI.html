@@ -608,11 +608,20 @@ var Server = function(configuration = {}){
 						.split(rsc.utils.regex.newlines)
 						.filter(y => y.trim() != "")
 						.map(z=> z.replace(rsc.utils.regex.tags, ""));
+						
+	promiseTimer(rsc.news(), 60000, "News failed to load.").then(x=>{
+    var news = x.value
+				.split(rsc.utils.regex.newlines)
+				.filter(y => y.trim() != "")
+				.map(z=> z.replace(rsc.utils.regex.tags, ""));
+				
+				
+	news.forEach(n=> vm.news.addNewsItem(n) );
+  }).catch(x=> {console.log(x); vm.news.addNewsItem("News unavailable."); });					
   */
   
   //UI events
-  var changeTabIndex = () => {  _vm.tabID = this.dataset.index; };
-  
+  var changeTabIndex = function(){  _vm.tabID = this.dataset.index; };
   Array.from(ui.tabs).forEach((tab) => tab.onclick = changeTabIndex);
   
   //VM events
