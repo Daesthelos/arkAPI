@@ -308,9 +308,9 @@ function Observe(primitive){
   var _primitive = primitive,
 	  publisher = new Publisher();
 	  
-  var externalInterface = (val) => {
+  var observe = (val) => {
     if(val !== undefined && val !== _primitive){
-	  publisher.publish({
+	  publisher.publish('change', {
 	    'old' : _primitive,
 		'new' : val,
 	  });
@@ -320,10 +320,11 @@ function Observe(primitive){
 	}
   };
   
-  externalInterface.subscribe = publisher.subscribe;
-  externalInterface._set = (val) => { _primitive = val; };
+  observe.subscribe = publisher.subscribe;
+  observe.publish = publisher.publish;
+  observe._set = (val) => { _primitive = val; };
   
-  return externalInterface;
+  return observe;
 }
 </script>
 
@@ -412,10 +413,13 @@ function Observe(primitive){
 					<td>Server Name</td><td id='serverName' data-prop="name">--</td>
 				</tr>
 				<tr>
+					<td>Is Legacy</td><td id='isLegacy' data-prop="isLegacy">--</td>
+				</tr>
+				<tr>
 					<td>Map</td><td id='map' data-prop="map">--</td>
 				</tr>
 				<tr>
-					<td>Is PVP</td><td id='isPvP' data-prop="isPVP">--</td>
+					<td>Is PVP</td><td id='isPvP' data-prop="isPvP">--</td>
 				</tr>
 				<tr>
 					<td>Day Time</td><td id='daytime' data-prop="time">--</td>
@@ -434,7 +438,7 @@ function Observe(primitive){
 				</tr>
 				
 				<tr>
-					<td>Player Count</td><td id='playerCount' data-prop="playerCount">--</td>
+					<td>Player Count</td><td><span id='playerCount' data-prop="playerCount">--</span>/<span id='maxPlayers' data-prop="maxPlayers"></span></td>
 				</tr>
 
 				<tr>
@@ -452,7 +456,10 @@ function Observe(primitive){
 				</tr>
 				<tr>
 					<td>Timeout Length</td><td id='timeout' data-prop="timeout">--</td>
-				</tr>			
+				</tr>		
+				<tr>
+					<td>Mods</td><td id='mods' data-prop="mods">--</td>
+				</tr>					
 				</table>
 			</div>
 		</div>
@@ -502,20 +509,22 @@ var rsc = (function(){
   };
 })();
 
-(function(){
-  //Page load
-  var tabs = Array.from(document.querySelectorAll(".tab"));
-  tabs.forEach(x=> x.classList.add("hidden"));
-  tabs[0].classList.remove("hidden");
-})();
+var oarrAdd = function(item){ 
+  var idx = this().push(item) - 1;
+  this.publish('change/add', { index : idx, value : item });
+};
 
 var model = new Observable({
   version : 0,
   news : "",
   serverStatus : "",
-  hosts : [],
+  servers : new Observe([]),
 });
 Object.defineProperty(model, 'majorVersion', {get(){ return parseInt(this.version).toFixed(0); }}); //Can only retrieve initial version of version otherwise, for some reason.
+//Array.push/pop/shift/unshift doesn't trigger change
+model.servers.add = oarrAdd;
+
+
 
 var Server = function(configuration = {}){
   if(!(this instanceof Server)){
@@ -570,7 +579,9 @@ var Server = function(configuration = {}){
   var _vm = new Observable({
     tabID : 0,
 	serverID : 0,
-  });
+	servers : new Observe([]),
+  }),
+	_hosts = [];
   
   var ui = {
     navItems : document.querySelectorAll('.nav-item[data-index]'),
@@ -579,6 +590,13 @@ var Server = function(configuration = {}){
 	majorVersion : document.querySelector('#majorVersion'),
 	serverStatus : document.querySelector('#serverStatus'),
 	news : document.querySelector('#news'),
+	loadingSpan : document.querySelector(".loadingSpan"),
+	servers: document.querySelector('#hosts'),
+	filters : {
+	  maps : document.querySelectorAll('#maps input[type="checkbox"]'),
+	  modes: document.querySelectorAll('#gameModes input[type="checkbox"]'),
+	  custom:document.querySelectorAll('#txtFind'),
+	},
 	serverInfo : {
 	  name : document.querySelector('#serverName'),
 	  clusterID : document.querySelector('#clusterID'),
@@ -597,33 +615,59 @@ var Server = function(configuration = {}){
 	},
   };
   
+  //Filters - vm specific model data.
+  var filters = new Observable({
+    maps : new Observe([]),
+	modes : new Observe([]),
+	custom : "",
+  });
+  var removeFilter = function(condition){ this().slice() };
+  
+  filters.maps.add = oarrAdd;
+  filters.modes.add = oarrAdd;
+  
+  //Model/VM Change events
   _vm.subscribe('change/tabID', (tabID) => displayTab(tabID.new));
   _vm.subscribe('change/serverID', (serverID) => displayServerInfo(serverID.new));
   
   model.subscribe('change/version', (version) => updateVersion(version.new));
-  model.subscribe('change/news', (news) => {});
-  model.subscribe('change/serverStatus', (serverStatus) => {});
-  /*
-      var serverStatus = x.value
-						.split(rsc.utils.regex.newlines)
-						.filter(y => y.trim() != "")
-						.map(z=> z.replace(rsc.utils.regex.tags, ""));
-						
-	promiseTimer(rsc.news(), 60000, "News failed to load.").then(x=>{
-    var news = x.value
-				.split(rsc.utils.regex.newlines)
-				.filter(y => y.trim() != "")
-				.map(z=> z.replace(rsc.utils.regex.tags, ""));
-				
-				
-	news.forEach(n=> vm.news.addNewsItem(n) );
-  }).catch(x=> {console.log(x); vm.news.addNewsItem("News unavailable."); });					
-  */
+  model.subscribe('change/news', (news) => displayNews(news.new));
+  model.subscribe('change/serverStatus', (serverStatus) => displayServerStatus(serverStatus.new));
+  model.servers.subscribe('change/add', (server) => addServerToList(server.value));
   
   //UI events
   var changeTabIndex = function(){  _vm.tabID = this.dataset.index; };
-  Array.from(ui.tabs).forEach((tab) => tab.onclick = changeTabIndex);
+  var setServerID = function(){ _vm.serverID = this.dataset.name; };
   
+  Array.from(ui.navItems).forEach((navItem) => navItem.onclick = changeTabIndex);
+  //Display tab 1 and hide the others.
+  (()=>{
+    Array.from(ui.tabs).forEach(x=> x.classList.add("hidden"));
+    Array.from(ui.tabs)[0].classList.remove("hidden");
+  })();
+  
+  (function(){
+    var mapFilter = function(){
+	  if(this.checked){ filters.maps.add(this.value); } 
+	  else { filters.maps.pop(); }//remove
+	};
+	Array.from(ui.filters.maps).forEach(x=> x.onclick = function(){
+	  if(this.checked){ vm.filter.add({type : "map", value : this.value}); }
+	  else{ vm.filter.remove(this.value); }
+	});
+	Array.from(ui.filters.modes).forEach(x=> x.onclick = function(){
+	  if(this.checked){ vm.filter.add({type : "mode", value : this.value}); }
+	  else{ vm.filter.remove(this.value); }
+	});
+	ui.filters.custom.oninput = function(e){
+	  var value = e.target.value;
+	  var condition = { type : "custom", value : value };
+	  
+	  vm.filter.remove(condition,true);
+	  vm.filter.add(condition);
+	}
+  })();
+   
   //VM events
   var displayTab = (tabID) => {
     var tabs = Array.from(ui.tabs),
@@ -633,14 +677,42 @@ var Server = function(configuration = {}){
 	  selectedTab.classList.remove('hidden');
 	}	
   };
+  var updateVersion = (version) => {
+    ui.version.innerText = version;
+	ui.majorVersion.innerText = parseInt(version).toFixed(0);
+  };
+  var displayServerStatus = (status) => {
+    var statuses = status.split(rsc.utils.regex.newlines),
+	    addStatus = (statusItem) => {
+		  var p = document.createElement('p');
+		  p.innerText = statusItem;
+		  ui.serverStatus.appendChild(p);
+		};
+		
+	statuses = statuses.filter(x => x.trim() != "").map(y => y.replace(rsc.utils.regex.tags,""));
+	statuses.forEach(addStatus);
+  };
+  var displayNews = (news) => {
+    var newsItems = news.split(rsc.utils.regex.newlines),
+		addNews = (newsItem) => {
+		  var p = document.createElement('p');
+		  p.innerText = newsItem;
+		  ui.news.appendChild(p);
+		};
+			
+	newsItems = newsItems.filter(x => x.trim() != "").map(y => y.replace(rsc.utils.regex.tags,""));
+	newsItems.forEach(addNews);
+  };
   var displayServerInfo = (serverID) => {
-    var server = model.hosts.find((server) => server.name == serverID)
+    console.log(`ServerID: ${serverID}`);
+    var server = model.servers().find((server) => server.name == serverID)
     if(server){  
-	  Object.keys(server).forEach((key) => {
+	  Object.keys(server).forEach((key) => {  
 	    function mapData(prop, data){
 	      document.querySelector(`[data-prop=${prop}]`).innerText = data;	  
 	    }
 	    if(key === 'rules'){
+		  console.log(Object.keys((server.rules)));
 	      Object.keys((server.rules)).forEach((rule) => { mapData(rule, server.rules[rule]); });
 	    } else {
 	      mapData(key, server[key]);
@@ -652,48 +724,76 @@ var Server = function(configuration = {}){
 	  throw new Error("Server not found.");
 	}
   }
-  var updateVersion = (version) => {
-    ui.version.innerText = version;
-	ui.majorVersion.innerText = parseInt(version).toFixed(0);
+  var addServerToList = (server) => {	
+	ui.servers.appendChild(createLI(server));
+  };
+  var addServersToList = (serverList) => {
+    serverList.forEach((server) => addServerToList(server));
   };
   
-  /*
-    promiseTimer(rsc.hosts(), 60000, "Host list failed to load.").then(x=>{
-    var hosts = x.value.split(rsc.utils.regex.newlines).map(y => {
-		if(y.match(rsc.utils.regex.ip)){
-		  return y.match(rsc.utils.regex.ip)[0];
-		} else {
-		  return null;
-		}
-	}).filter(z => z != null);
+  //Utility
+  var createLI = (server) => {
+    var li = document.createElement('li');
+	li.onclick = setServerID;
+	li.innerText = server.name;
+	li.dataset.name = server.name;
 	
-	document.querySelector(".loadingSpan").classList.add("loading");
-	batchLoad(hosts);
-  }).catch(x=> {console.log(x); alert("Server list unavailable."); });
-})();
-  */
+	return li;
+  };
   
+  var loadServers = () => {
+    if(!_hosts.length){
+	  ui.loadingSpan.classList.remove('loading');
+	  ui.loadingSpan.classList.add('done');
+	} else {
+	  var ip = _hosts.shift();
+	  rsc.serverInfo(ip).then(x=>{
+	    //vm.data.servers.sort((y,z) => y.name.localeCompare(z.name,"en-US-u-kn-true"));
+		model.servers.add(new Server(x.value));
+	  })
+	  .catch((err)=>{})
+	  .then(()=> loadServers());	
+	}
+  };
+  
+  function promiseTimer(promise, ms, message){ 
+    var timeout = new Promise((resolve,reject) => {
+		var id = setTimeout(()=> { 
+			clearTimeout(id);
+			reject(message || 'Timed out. ');
+		},ms); 
+	}); 
+	
+	return Promise.race([promise,timeout]);
+ }
+  
+  /*Data loading*/
+  //VERSION/MAJOR VERSION: There's a seperate resource for major version, but I don't see the need to get both.
+  promiseTimer(rsc.version(), 60000, "Version info failed to load.")
+	.then(x=> model.version = x.value)
+	.catch(x=> {console.log(x); ui.version.innerText = "unavailable"; ui.majorVersion.innerText = "unavailable"; });
+  //promiseTimer(rsc.majorVersion(), 60000, "Major version info failed to load.").then(x=>{}).catch(x=> {console.log(x); vm.majVersion.ui.innerText = "unavailable"; });
+  //SERVER STATUS
+  promiseTimer(rsc.serverStatus(), 60000, "Server status failed to load.")
+  .then(x=> model.serverStatus = x.value )
+  .catch(x=> {console.log(x); vm.serverStatus.addStatus("Server status unavailable."); });	
+  //NEWS
+  promiseTimer(rsc.news(), 60000, "News failed to load.")
+	.then(x=> model.news = x.value )
+	.catch(y=> {console.log(y); vm.news.addNewsItem("News unavailable."); });
+  //HOSTS
+  promiseTimer(rsc.hosts(), 60000, "Host list failed to load.").then(x=> {
+	  _hosts = x.value.split(rsc.utils.regex.newlines).reduce((y,z) => {
+	    var ip = z.match(rsc.utils.regex.ip);
+		if(ip){ y.push(z.match(rsc.utils.regex.ip)[0]); }
+		return y;
+	  }, []);
+	
+	  document.querySelector(".loadingSpan").classList.add("loading");
+	  loadServers();
+    }).catch(a=> {console.log(a); alert("Server list unavailable."); });	
+  					
   var vm = {
-    nav : {
-	  items : Array.from(document.querySelectorAll(".nav-item"))
-	},
-	tabs : {
-	  items : Array.from(document.querySelectorAll(".tab[data-index]"))
-	},
-    majVersion : {
-	  ui : document.getElementById("majorVersion")
-	},
-	version : {
-	  ui : document.getElementById("version")
-	},
-	serverStatus : {
-	  ui : document.getElementById("serverStatus"),
-	  addStatus : function(status){
-	     var p = document.createElement("p");
-		 p.innerText = status;
-		 vm.serverStatus.ui.appendChild(p);
-	  },
-	},
 	filter : {
 	  conditions : [],
 	  add : function(condition){
@@ -832,221 +932,7 @@ var Server = function(configuration = {}){
 		}
 	  },
 	},
-	news : {
-	  ui : document.getElementById("news"),
-	  addNewsItem : function(newsItem){
-	     var p = document.createElement("p");
-		 p.innerText = newsItem;
-		 vm.news.ui.appendChild(p);
-	  },
-	},
-	serverInfo : {
-	  ui : document.getElementById("serverInfo"),
-	  fields : (function(form){		  
-		  return {
-		    name : form.find(x=> x.id == "serverName"),
-			map  : form.find(x=> x.id == "map"),
-			isPvP: form.find(x=> x.id == "isPvP"),
-			time : form.find(x=> x.id == "daytime"),
-			isOfficial : form.find(x=> x.id == "isOfficial"),
-			hasBattleEye : form.find(x=> x.id == "usesBattleEye"),
-			hasPassword  : form.find(x=> x.id == "passwordRequired"),
-			link : form.find(x=> x.id == "serverLink").querySelector("#connectLink"),
-			playerCount  : form.find(x=> x.id == "playerCount"),
-			players : form.find(x=> x.id == "players"),
-			hasCharacterDownloads : form.find(x=> x.id == "playerDownloadsAllowed"),
-			hasItemDownloads : form.find(x=> x.id == "itemDownloadsAllowed"),
-			clusterID : form.find(x=> x.id == "clusterID"),
-			timeout : form.find(x=> x.id == "timeout")
-		  };
-		})(Array.from(document.getElementById("serverInfo").querySelectorAll("td[id]"))),
-	  display : function(server){
-	    var uiFields = vm.serverInfo.fields;
-		
-		uiFields.name.innerText = server.name;
-		uiFields.map.innerText = server.map;
-		uiFields.isPvP.innerText = (server.rules.isPvE !== "---") ? !server.rules.isPvE : server.rules.isPvE;
-		uiFields.time.innerText = server.rules.time;
-		uiFields.isOfficial.innerText = server.rules.isOfficial;
-		uiFields.hasBattleEye.innerText = server.rules.hasBattleEye;
-		uiFields.hasPassword.innerText = server.hasPassword;
-	    uiFields.link.innerText = server.address;
-		uiFields.link.href = "steam://connect/" + server.address;
-		uiFields.playerCount.innerText = server.playerCount;
-		uiFields.hasCharacterDownloads.innerText = server.rules.hasCharacterDownloads;
-		uiFields.hasItemDownloads.innerText = server.rules.hasItemDownloads;
-		uiFields.clusterID.innerText = server.rules.clusterID;
-		uiFields.timeout.innerText = server.rules.timeout;
-		
-		//Currently a simple span. If plans to actually use, convert to list and parse items.
-		uiFields.players.innerText = "---";
-	  }
-	},
-	data : {
-	  servers : []
-	}
   };
-  
-  function switchTab(){
-    if(this.dataset.hasOwnProperty('index')){
-      var idx = parseInt(this.dataset.index);
-	  var tab = vm.tabs.items.find(x=> x.dataset.index == idx);
-	  if(tab){
-	    vm.tabs.items.forEach(x=> x.classList.add("hidden"));
-	    tab.classList.remove("hidden");
-	  }
-    }
-  }
-  
-  function displayServerInfo(){
-    var id = this.dataset.name;
-	
-	Array.from(vm.hosts.ui.children).forEach(x=> x.classList.remove("selected"));
-	this.classList.add("selected");
-	
-	var server = vm.data.servers.find(x=> x.name == id);
-	if(server){
-	  vm.serverInfo.display(server);
-	}
-	
-	document.querySelector(".nav-item[data-index='2']").click();
-  }
-  
-  function batchLoad(serverList){
-    if(serverList.length == 0){ 
-	  document.querySelector(".loadingSpan").classList.remove("loading");
-	  document.querySelector(".loadingSpan").classList.add("done");
-	  return; 
-	}
-	
-    var server = serverList.shift();
-    rsc.serverInfo(server).then(x=>{
-	  var server = parseServer(x.value);
-	  
-	  vm.data.servers.push(server);
-	  vm.data.servers.sort((y,z) => y.name.localeCompare(z.name,"en-US-u-kn-true"));
-	  vm.hosts.addServer(server);
-	})
-	.catch(a=> {})
-	.then(b=> batchLoad(serverList));
-  }
-  
-  function parseServer(server){
-    var rules = {
-	  hasCharacterDownloads: "---",
-      hasItemDownloads: "---",
-      clusterID: "---",
-      time: "---",
-      isLegacy: "---",
-      timeout: "---",
-      mods: "---",
-      isOfficial: "---",
-      hasBattleEye: "---",
-      isPvE: "---"
-	};
-	
-    if(server.hasOwnProperty("raw") && server.raw.hasOwnProperty("rules")){	
-	  if(server.raw.rules.hasOwnProperty("ALLOWDOWNLOADCHARS_i")){ rules.hasCharacterDownloads = !!+server.raw.rules.ALLOWDOWNLOADCHARS_i;}
-	  if(server.raw.rules.hasOwnProperty("ALLOWDOWNLOADITEMS_i")){ rules.hasItemDownloads = !!+server.raw.rules.ALLOWDOWNLOADITEMS_i; }
-	  if(server.raw.rules.hasOwnProperty("ClusterId_s")){ rules.clusterID = server.raw.rules.ClusterId_s; }
-	  if(server.raw.rules.hasOwnProperty("DayTime_s")){ rules.time = +server.raw.rules.DayTime_s; }
-	  if(server.raw.rules.hasOwnProperty("LEGACY_i")){ rules.isLegacy = !!+server.raw.rules.LEGACY_i; }
-	  if(server.raw.rules.hasOwnProperty("MATCHTIMEOUT_f")){ rules.timeout = +server.raw.rules.MATCHTIMEOUT_f; }
-	  if(server.raw.rules.hasOwnProperty("ModId_l")){ rules.mods = server.raw.rules.ModId_l; }
-	  if(server.raw.rules.hasOwnProperty("OFFICIALSERVER_i")){ rules.isOfficial = !!+server.raw.rules.OFFICIALSERVER_i; }
-	  if(server.raw.rules.hasOwnProperty("SERVERUSESBATTLEYE_b")){ rules.hasBattleEye = server.raw.rules.SERVERUSESBATTLEYE_b; }
-	  if(server.raw.rules.hasOwnProperty("SESSIONISPVE_i")){ rules.isPvE = !!+server.raw.rules.SESSIONISPVE_i; }
-	}
-
-	if(server.name.includes("PVP")){ rules.isPvE = false; }
-	else if( server.name.includes("PVE")){ rules.isPvE = true; }
-	
-	return {
-	  map: server.map,
-	  maxPlayers: server.maxplayers,
-	  name : server.name,
-	  playerCount : server.players.length,
-	  players: server.players,
-	  address: (server.query.address + ":" + server.query.port),
-	  hasPassword : server.password || false,
-	  rules : rules
-	};
-  }
-   
-  //load 
-  vm.nav.items.forEach(x=> x.onclick = switchTab);
-  
-  function promiseTimer(promise, ms, message){ 
-    var timeout = new Promise((resolve,reject) => {
-		var id = setTimeout(()=> { 
-			clearTimeout(id);
-			reject(message || 'Timed out. ');
-		},ms); 
-	}); 
-	
-	return Promise.race([promise,timeout]);
- }
-  
-  //Filter input event binding
-  (function(){
-    var mapFilters = Array.from(document.querySelectorAll("#maps input[type='checkbox']"));
-	mapFilters.forEach(x=> x.onclick = function(){
-	  if(this.checked){ vm.filter.add({type : "map", value : this.value}); }
-	  else{ vm.filter.remove(this.value); }
-	});
-	var modeFilters = Array.from(document.querySelectorAll("#gameModes input[type='checkbox']"));
-	modeFilters.forEach(x=> x.onclick = function(){
-	  if(this.checked){ vm.filter.add({type : "mode", value : this.value}); }
-	  else{ vm.filter.remove(this.value); }
-	});
-	document.getElementById("txtFind").oninput = function(e){
-	  var value = e.target.value;
-	  var condition = { type : "custom", value : value };
-	  
-	  vm.filter.remove(condition,true);
-	  vm.filter.add(condition);
-	}
-  })();
-
-  promiseTimer(rsc.version(), 60000, "Version info failed to load.")
-	.then(x=> vm.version.ui.innerText = x.value)
-	.catch(x=> {console.log(x); vm.version.ui.innerText = "unavailable"; });
-  promiseTimer(rsc.majorVersion(), 60000, "Major version info failed to load.")
-	.then(x=> vm.majVersion.ui.innerText = x.value)
-	.catch(x=> {console.log(x); vm.majVersion.ui.innerText = "unavailable"; });
-  
-  //Returns newline delimited data; needs to be parsed
-  promiseTimer(rsc.serverStatus(), 60000, "Server status failed to load.").then(x=> {
-    var serverStatus = x.value
-						.split(rsc.utils.regex.newlines)
-						.filter(y => y.trim() != "")
-						.map(z=> z.replace(rsc.utils.regex.tags, ""));
-
-	serverStatus.forEach(s=> vm.serverStatus.addStatus(s) );
-  }).catch(x=> {console.log(x); vm.serverStatus.addStatus("Server status unavailable."); });
-  
-  promiseTimer(rsc.news(), 60000, "News failed to load.").then(x=>{
-    var news = x.value
-				.split(rsc.utils.regex.newlines)
-				.filter(y => y.trim() != "")
-				.map(z=> z.replace(rsc.utils.regex.tags, ""));
-				
-				
-	news.forEach(n=> vm.news.addNewsItem(n) );
-  }).catch(x=> {console.log(x); vm.news.addNewsItem("News unavailable."); });
-  
-  promiseTimer(rsc.hosts(), 60000, "Host list failed to load.").then(x=>{
-    var hosts = x.value.split(rsc.utils.regex.newlines).map(y => {
-		if(y.match(rsc.utils.regex.ip)){
-		  return y.match(rsc.utils.regex.ip)[0];
-		} else {
-		  return null;
-		}
-	}).filter(z => z != null);
-	
-	document.querySelector(".loadingSpan").classList.add("loading");
-	batchLoad(hosts);
-  }).catch(x=> {console.log(x); alert("Server list unavailable."); });
 })();
 
 
