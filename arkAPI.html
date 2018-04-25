@@ -524,8 +524,6 @@ Object.defineProperty(model, 'majorVersion', {get(){ return parseInt(this.versio
 //Array.push/pop/shift/unshift doesn't trigger change
 model.servers.add = oarrAdd;
 
-
-
 var Server = function(configuration = {}){
   if(!(this instanceof Server)){
     throw new Error("Server is a constructor and must be called with the new keyword.");
@@ -539,7 +537,7 @@ var Server = function(configuration = {}){
     map : setDefault(configuration.map, "---"),
 	playerCount : (configuration.hasOwnProperty('players')) ? configuration.players.length : "---",
 	maxPlayers : setDefault(configuration.maxplayers, "---"),
-	players : setDefault(configuration.players, "---"),
+	players : "---", //setDefault(configuration.players, "---"), Currently not handled properly
 	rules : {
 	  hasCharacterDownloads : "---",
 	  hasItemDownloads : "---",
@@ -575,7 +573,6 @@ var Server = function(configuration = {}){
 };
 
 (function(){
- 
   var _vm = new Observable({
     tabID : 0,
 	serverID : 0,
@@ -595,7 +592,7 @@ var Server = function(configuration = {}){
 	filters : {
 	  maps : document.querySelectorAll('#maps input[type="checkbox"]'),
 	  modes: document.querySelectorAll('#gameModes input[type="checkbox"]'),
-	  custom:document.querySelectorAll('#txtFind'),
+	  custom: document.querySelector('#txtFind'),
 	},
 	serverInfo : {
 	  name : document.querySelector('#serverName'),
@@ -616,57 +613,93 @@ var Server = function(configuration = {}){
   };
   
   //Filters - vm specific model data.
+  //It's fine for props not to be observable, just have to be careful to explicitly set them
   var filters = new Observable({
-    maps : new Observe([]),
-	modes : new Observe([]),
+    maps : [],
+	modes : [],
 	custom : "",
   });
-  var removeFilter = function(condition){ this().slice() };
-  
-  filters.maps.add = oarrAdd;
-  filters.modes.add = oarrAdd;
+  filters.update = (prop) => {
+    var original = model.servers().slice();
+	
+	if(filters.maps.length || filters.modes.length || filters.custom.trim().length){
+      switch(prop){
+	    case 'maps':
+	      original = original.filter((server) => filters.maps.includes(server.map));
+	    case 'modes':
+	      var pveServers = (filters.modes.includes('pve')) ? original.filter((server) => { return Boolean(server.name.match(/pve/gi)) || !server.rules.isPvP; }) : [],
+	  	    pvpServers = (filters.modes.includes('pvp')) ? original.filter((server) => { return Boolean(server.name.match(/pvp/gi)) || server.rules.isPvP; }) : [],
+	  		notameServers = (filters.modes.includes('noTame')) ? original.filter((server) => server.name.includes("NoTaming")) : [];
+	      var filteredServers = pveServers
+	  						  .concat(pvpServers)
+	  						  .concat(notameServers)
+	  						  .reduce((list,item) => {
+	  						    var serverIDs = list.map(server => server.name);
+	  							if(!list.includes(item.name)){ list.push(item); }
+	  							
+	  							return list;
+	  						  },[]);
+	      var keys = filteredServers.map((server) => server.name); 
+
+	  	original = original.filter((server)=> keys.includes(server.name));
+	    case 'custom':
+	      original = original.filter((server) => server.name.includes(filters.custom.name));
+	    default:
+	      break;
+	  }
+	}
+	
+	_vm.servers(original.sort());
+  };
+  filters.test = (server) => {
+    var hasAllowedMap = (filters.maps.length) ? filters.maps.includes(server.map) : true,
+	    hasAllowedMode = (()=>{
+	  if(filters.modes.includes('pvp')){ return Boolean(server.name.match(/pvp/gi)) || server.rules.isPvP;}
+	  else if(filters.modes.includes('pve')){ return Boolean(server.name.match(/pve/gi)) || !server.rules.isPvP;}
+	  else if(filters.modes.includes('noTame')){ return server.name.includes('NoTaming');}
+	  else { return true; }
+	})(),
+	    hasAllowedCustom = (filters.custom.trim().length) ? server.name.includes(filter.custom) : true;
+    return hasAllowedMap && hasAllowedMode && hasAllowedCustom;
+  };
   
   //Model/VM Change events
   _vm.subscribe('change/tabID', (tabID) => displayTab(tabID.new));
   _vm.subscribe('change/serverID', (serverID) => displayServerInfo(serverID.new));
+  _vm.servers.subscribe('change', (server) => addServersToList(server.new)); //{ old: [], new : [Server,Server,Server]}
   
   model.subscribe('change/version', (version) => updateVersion(version.new));
   model.subscribe('change/news', (news) => displayNews(news.new));
   model.subscribe('change/serverStatus', (serverStatus) => displayServerStatus(serverStatus.new));
-  model.servers.subscribe('change/add', (server) => addServerToList(server.value));
+  model.servers.subscribe('change/add', (server) => _vm.servers(_vm.servers().concat(server.value)));// model -> filter -> vm -> ui
+  
+  filters.subscribe('change/maps', (map) => filters.update('map'));
+  filters.subscribe('change/modes', (mode) => filters.update('modes'));
+  filters.subscribe('change/custom', (custom) => filters.update('custom'));
   
   //UI events
   var changeTabIndex = function(){  _vm.tabID = this.dataset.index; };
   var setServerID = function(){ _vm.serverID = this.dataset.name; };
   
-  Array.from(ui.navItems).forEach((navItem) => navItem.onclick = changeTabIndex);
   //Display tab 1 and hide the others.
   (()=>{
     Array.from(ui.tabs).forEach(x=> x.classList.add("hidden"));
     Array.from(ui.tabs)[0].classList.remove("hidden");
   })();
   
-  (function(){
-    var mapFilter = function(){
-	  if(this.checked){ filters.maps.add(this.value); } 
-	  else { filters.maps.pop(); }//remove
-	};
-	Array.from(ui.filters.maps).forEach(x=> x.onclick = function(){
-	  if(this.checked){ vm.filter.add({type : "map", value : this.value}); }
-	  else{ vm.filter.remove(this.value); }
-	});
-	Array.from(ui.filters.modes).forEach(x=> x.onclick = function(){
-	  if(this.checked){ vm.filter.add({type : "mode", value : this.value}); }
-	  else{ vm.filter.remove(this.value); }
-	});
-	ui.filters.custom.oninput = function(e){
-	  var value = e.target.value;
-	  var condition = { type : "custom", value : value };
-	  
-	  vm.filter.remove(condition,true);
-	  vm.filter.add(condition);
-	}
-  })();
+  //DOM event binding
+  Array.from(ui.navItems).forEach((navItem) => navItem.onclick = changeTabIndex);
+  var mapFilter = function(){
+    if(this.checked){ filters.maps = filters.maps.concat(this.value); } 
+    else { filters.maps = filters.maps.filter(condition => condition != this.value); }//remove
+  },
+      modeFilter = function(){
+  	if(this.checked){ filters.modes = filters.modes.concat(this.value); } 
+      else { filters.modes = filters.modes.filter(condition => condition != this.value); }
+  };
+  Array.from(ui.filters.maps).forEach(x=> x.onclick = mapFilter);
+  Array.from(ui.filters.modes).forEach(x=> x.onclick = modeFilter);
+  ui.filters.custom.oninput = (e) => { filters.custom = e.target.value; };
    
   //VM events
   var displayTab = (tabID) => {
@@ -704,7 +737,6 @@ var Server = function(configuration = {}){
 	newsItems.forEach(addNews);
   };
   var displayServerInfo = (serverID) => {
-    console.log(`ServerID: ${serverID}`);
     var server = model.servers().find((server) => server.name == serverID)
     if(server){  
 	  Object.keys(server).forEach((key) => {  
@@ -712,7 +744,6 @@ var Server = function(configuration = {}){
 	      document.querySelector(`[data-prop=${prop}]`).innerText = data;	  
 	    }
 	    if(key === 'rules'){
-		  console.log(Object.keys((server.rules)));
 	      Object.keys((server.rules)).forEach((rule) => { mapData(rule, server.rules[rule]); });
 	    } else {
 	      mapData(key, server[key]);
@@ -725,10 +756,35 @@ var Server = function(configuration = {}){
 	}
   }
   var addServerToList = (server) => {	
-	ui.servers.appendChild(createLI(server));
+	if(filters.test(server)){ 
+	
+	  ui.servers.appendChild(createLI(server));
+	}
   };
   var addServersToList = (serverList) => {
-    serverList.forEach((server) => addServerToList(server));
+    var tmp = serverList.length;//sort(function(a,b){ return a.name.localeCompare(b.name,"en-US-u-kn-true");}
+	
+    var currentList = Array.from(document.querySelectorAll('#hosts li')).map((li)=> li.dataset.name),
+	    newList = serverList.map((server) => server.name);
+			
+	var additions = newList.filter((id) => !currentList.includes(id)),
+	    removals = currentList.filter((id) => !newList.includes(id));
+		
+	var parent = ui.servers;
+	
+	//console.log('additions:',additions);
+	//console.log('removals: ', removals);
+	
+	additions.forEach((id) => {
+	  if(!parent.hasChildNodes()){ addServerToList( serverList.find((server) => server.name == id) ); }
+	  else {
+	    var idx = newList.indexOf(id),
+		    prevElement = Array.from(parent.childNodes).find((element) => element.dataset.name == newList[idx - 1]);// doesn't work bc new list will have things in a different order
+					
+		parent.insertBefore(createLI(serverList[idx]), prevElement.nextSibling);
+	  }
+	});
+	removals.forEach((id)=> parent.removeChild(parent.querySelector(`li[data-name='${id}']`)));
   };
   
   //Utility
@@ -794,105 +850,6 @@ var Server = function(configuration = {}){
     }).catch(a=> {console.log(a); alert("Server list unavailable."); });	
   					
   var vm = {
-	filter : {
-	  conditions : [],
-	  add : function(condition){
-	    vm.filter.conditions.push(condition);
-		vm.hosts.reloadServers(vm.filter.get());
-	  },
-	  get : function(){
-	  	var mapFilters = vm.filter.conditions.filter(x=> x.type == "map"),
-		    modeFilters = vm.filter.conditions.filter(x=> x.type == "mode"),
-			shallowServers = vm.data.servers.slice();
-		
-		if(mapFilters.length){
-		  mapFilters = mapFilters.map(x=> x.value);
-		  shallowServers = shallowServers.filter(x=> mapFilters.includes(x.map));
-		}
-		if(modeFilters.length){
-		  var noTameServers = [],
-		      pvpServers = [],
-			  pveServers = [],
-			  filteredServers = [];
-			  
-		  modeFilters = modeFilters.map(x=> x.value);
-		  
-		  if(modeFilters.includes("noTame")){
-		    noTameServers = shallowServers.filter(x=> x.name.includes("NoTaming"));
-		  }
-		  if(modeFilters.includes("pvp")){
-		    pvpServers = shallowServers.filter(x=> { return (x.name.includes("PVP") || !x.rules.isPvE); });
-		  }
-		  if(modeFilters.includes("pve")){
-		    pveServers = shallowServers.filter(x=> { return (x.name.includes("PVE") || x.rules.isPvE); })
-		  }
-		  
-		  filteredServers = noTameServers.concat(pvpServers).concat(pveServers);
-		  filteredServers = filteredServers.reduce((x,y)=> { 
-			var keys = x.map(z=>z.name);
-			
-			if(!keys.includes(y.name)){ x.push(y); } return x; 
-		  } ,[]);	  
-		  var keys = filteredServers.map(x=> x.name);
-		  shallowServers =  shallowServers.filter(x=> keys.includes(x.name) );
-		}
-		if(vm.filter.conditions.filter(x=> x.type == "custom").length){
-		  var condition = vm.filter.conditions.filter(x=> x.type == "custom")[0];
-		  shallowServers = shallowServers.filter(x=> x.name.toUpperCase().includes(condition.value.toUpperCase()));
-		}
-		
-		return shallowServers;
-	  },
-	  remove : function(condition, isCustom){  
-
-	    var item = vm.filter.conditions.find(x=> x.value == condition);
-		if(item){
-		  var idx = vm.filter.conditions.map(x=> x.value).indexOf(item.value);
-		  vm.filter.conditions.splice(idx,1);
-		}
-		
-		if(isCustom){
-		  var search = vm.filter.conditions.find(x=> x.type == "custom");
-		  if(search){
-		    var idx = vm.filter.conditions.map(x=> x.type).indexOf("custom");
-		    vm.filter.conditions.splice(idx,1); 
-		  }
-		}
-		
-		if(!vm.filter.conditions.length){
-		  vm.hosts.reloadServers();
-		} else {
-		  vm.hosts.reloadServers(vm.filter.get());
-		}
-	  },
-	  test : function(server){
-	    var conditions = vm.filter.conditions;
-			
-	    //I'm having a hard time with this
-		if(conditions.filter(x=> x.type == "custom").length){
-		  var condition = conditions.filter(x=> x.type == "custom")[0];
-		  if(server.name.toUpperCase().includes(condition.value.toUpperCase())){
-		    return true;
-		  }
-		}	
-			
-		var maps = conditions.filter(x=> x.type == "map");
-		if(maps.length){
-		  maps = maps.map(x=> x.value);
-		  if(maps.includes(server.map)){ return true;}
-		}
-		
-		var modes = conditions.filter(x=> x.type == "mode");
-		if(modes.length){
-		  modes = modes.map(x=> x.value);
-		  if(modes.includes("noTame") && server.name.includes("NoTaming")){ return true; }
-		  if(modes.includes("pve") && (server.rules.isPvE == "---" || server.rules.isPvE)){ return true; }
-		  if(modes.includes("pvp") && (server.rules.isPvE == "---" || !server.rules.isPvE)){ return true; }
-		}
-		
-		return false;
-	  }
-	},
 	hosts : {
 	  ui : document.getElementById("hosts"),
 	  addServer : function(server){
