@@ -377,12 +377,12 @@ function Observe(primitive){
 			<div class="row">
 			<h4 class="subtitle">Maps</h4>
 			<ul id="maps">
-			<li><input id="a" type="checkbox" value="TheIsland" /><label for="a">The Island</label></li>
-			<li><input id="b" type="checkbox" value="TheCenter" /><label for="b">The Center</label>	</li>
-			<li><input id="c" type="checkbox" value="Ragnarok"/><label for="c">Ragnarok</label></li>
-			<li><input id="d" type="checkbox" value="PGARK" /><label for="d">Procedural</label></li>
-			<li><input id="e" type="checkbox" value="ScorchedEarth" /><label for="e">Scorched Earth</label></li>
-			<li><input id="f" type="checkbox" value="Aberration" /><label for="f">Abberation</label></li>
+			<li><label><input type="checkbox" value="TheIsland" /> The Island</label></li>
+			<li><label><input type="checkbox" value="TheCenter" /> The Center</label>	</li>
+			<li><label><input type="checkbox" value="Ragnarok"/> Ragnarok</label></li>
+			<li><label><input type="checkbox" value="PGARK" /> Procedural</label></li>
+			<li><label><input type="checkbox" value="ScorchedEarth" /> Scorched Earth</label></li>
+			<li><label><input type="checkbox" value="Aberration" /> Abberation</label></li>
 			</ul>
 			</div>
 			<div class="row">
@@ -438,7 +438,7 @@ function Observe(primitive){
 				</tr>
 				
 				<tr>
-					<td>Player Count</td><td><span id='playerCount' data-prop="playerCount">--</span>/<span id='maxPlayers' data-prop="maxPlayers"></span></td>
+					<td>Player Count</td><td><span id='playerCount' data-prop="playerCount">--</span> / <span id='maxPlayers' data-prop="maxPlayers">--</span></td>
 				</tr>
 
 				<tr>
@@ -533,7 +533,6 @@ var Server = function(configuration = {}){
   var server = {
   	name : setDefault(configuration.name, "---"),
 	get address(){ return "---"; },
-	hasPassword : setDefault(configuration.map, "---"),
     map : setDefault(configuration.map, "---"),
 	playerCount : (configuration.hasOwnProperty('players')) ? configuration.players.length : "---",
 	maxPlayers : setDefault(configuration.maxplayers, "---"),
@@ -541,6 +540,7 @@ var Server = function(configuration = {}){
 	rules : {
 	  hasCharacterDownloads : "---",
 	  hasItemDownloads : "---",
+	  hasPassword : "---",
 	  clusterID : "---",
 	  time : "---",
 	  isLegacy : "---",
@@ -558,15 +558,16 @@ var Server = function(configuration = {}){
   
   if(configuration.hasOwnProperty("raw") && configuration.raw.hasOwnProperty("rules")){
     var configRules = configuration.raw.rules;
-	if(configRules.hasOwnProperty('ALLOWDOWNLOADCHARS_i')){ server.rules.hasCharacterDownloads = Boolean(configRules.ALLOWDOWNLOADCHARS_i);}
-	if(configRules.hasOwnProperty('ALLOWDOWNLOADITEMS_i')){ server.rules.hasItemDownloads      = Boolean(configRules.ALLOWDOWNLOADITEMS_i);}
+	if(configRules.hasOwnProperty('ALLOWDOWNLOADCHARS_i')){ server.rules.hasCharacterDownloads = Boolean(parseInt(configRules.ALLOWDOWNLOADCHARS_i));}
+	if(configRules.hasOwnProperty('ALLOWDOWNLOADITEMS_i')){ server.rules.hasItemDownloads      = Boolean(parseInt(configRules.ALLOWDOWNLOADITEMS_i));}
+	if(configRules.hasOwnProperty('ServerPassword_b'))    { server.rules.hasPassword           = configRules.ServerPassword_b; }
 	if(configRules.hasOwnProperty('ClusterId_s'))		  { server.rules.clusterID		       = configRules.ClusterId_s;}
 	if(configRules.hasOwnProperty('DayTime_s'))		  	  { server.rules.time 				   = Number(configRules.DayTime_s);}
-	if(configRules.hasOwnProperty('LEGACY_i'))		  	  { server.rules.isLegacy 			   = Boolean(configRules.LEGACY_i);}
+	if(configRules.hasOwnProperty('LEGACY_i'))		  	  { server.rules.isLegacy 			   = Boolean(parseInt(configRules.LEGACY_i));}
 	if(configRules.hasOwnProperty('ModId_l'))		  	  { server.rules.mods 				   = configRules.ModId_l;}
-	if(configRules.hasOwnProperty('OFFICIALSERVER_i'))	  { server.rules.isOfficial 		   = Boolean(configRules.OFFICIALSERVER_i);}
+	if(configRules.hasOwnProperty('OFFICIALSERVER_i'))	  { server.rules.isOfficial 		   = Boolean(parseInt(configRules.OFFICIALSERVER_i));}
 	if(configRules.hasOwnProperty('SERVERUSESBATTLEYE_b')){ server.rules.hasBattleEye 		   = configRules.SERVERUSESBATTLEYE_b;}
-	if(configRules.hasOwnProperty('SESSIONISPVE_i'))	  { server.rules.isPvP 				   = !Boolean(configRules.SESSIONISPVE_i);}
+	if(configRules.hasOwnProperty('SESSIONISPVE_i'))	  { server.rules.isPvP 				   = !Boolean(parseInt(configRules.SESSIONISPVE_i));}
   }
   
   return server;
@@ -622,10 +623,12 @@ var Server = function(configuration = {}){
   filters.update = (prop) => {
     var original = model.servers().slice();
 	
+	//There's a bug here. if e.g you select pve, then select -> deselect a map, then everything is removed
 	if(filters.maps.length || filters.modes.length || filters.custom.trim().length){
       switch(prop){
 	    case 'maps':
-	      original = original.filter((server) => filters.maps.includes(server.map));
+	      original = filters.maps.length ? original.filter((server) => filters.maps.includes(server.map)) : original;
+		  break;
 	    case 'modes':
 	      var pveServers = (filters.modes.includes('pve')) ? original.filter((server) => { return Boolean(server.name.match(/pve/gi)) || !server.rules.isPvP; }) : [],
 	  	    pvpServers = (filters.modes.includes('pvp')) ? original.filter((server) => { return Boolean(server.name.match(/pvp/gi)) || server.rules.isPvP; }) : [],
@@ -640,24 +643,29 @@ var Server = function(configuration = {}){
 	  							return list;
 	  						  },[]);
 	      var keys = filteredServers.map((server) => server.name); 
-
-	  	original = original.filter((server)=> keys.includes(server.name));
+	  	original = filters.modes.length ? original.filter((server)=> keys.includes(server.name)) : original;
+		  break;
 	    case 'custom':
-	      original = original.filter((server) => server.name.includes(filters.custom.name));
+	      original = filters.custom.trim().length ? original.filter((server) => server.name.includes(filters.custom)) : original;
+		  break;
 	    default:
 	      break;
 	  }
 	}
-	
-	_vm.servers(original.sort());
+	//console.log('When filtered:', original);
+	_vm.servers(original);
   };
   filters.test = (server) => {
     var hasAllowedMap = (filters.maps.length) ? filters.maps.includes(server.map) : true,
-	    hasAllowedMode = (()=>{
-	  if(filters.modes.includes('pvp')){ return Boolean(server.name.match(/pvp/gi)) || server.rules.isPvP;}
-	  else if(filters.modes.includes('pve')){ return Boolean(server.name.match(/pve/gi)) || !server.rules.isPvP;}
-	  else if(filters.modes.includes('noTame')){ return server.name.includes('NoTaming');}
-	  else { return true; }
+	    hasAllowedMode = (()=>{		  
+		  var fPvP = false,
+		      fPvE = false,
+			  fNoT = false;
+		  if(filters.modes.includes('pvp')){ fPvP = (server.rules.isPvP !== '---') ? server.rules.isPvP : Boolean(server.name.match(/pvp/gi));}	  
+		  if(filters.modes.includes('pve')){ fPvE = (server.rules.isPvP !== '---') ? !server.rules.isPvP : Boolean(server.name.match(/pve/gi));}
+		  if(filters.modes.includes('noTame')){ fNoT = server.name.includes('NoTaming'); }
+		  
+		  return (filters.modes.length) ? (fPvP || fPvE || fNoT) : true;
 	})(),
 	    hasAllowedCustom = (filters.custom.trim().length) ? server.name.includes(filter.custom) : true;
     return hasAllowedMap && hasAllowedMode && hasAllowedCustom;
@@ -673,7 +681,7 @@ var Server = function(configuration = {}){
   model.subscribe('change/serverStatus', (serverStatus) => displayServerStatus(serverStatus.new));
   model.servers.subscribe('change/add', (server) => _vm.servers(_vm.servers().concat(server.value)));// model -> filter -> vm -> ui
   
-  filters.subscribe('change/maps', (map) => filters.update('map'));
+  filters.subscribe('change/maps', (map) => filters.update('maps'));
   filters.subscribe('change/modes', (mode) => filters.update('modes'));
   filters.subscribe('change/custom', (custom) => filters.update('custom'));
   
@@ -741,7 +749,7 @@ var Server = function(configuration = {}){
     if(server){  
 	  Object.keys(server).forEach((key) => {  
 	    function mapData(prop, data){
-	      document.querySelector(`[data-prop=${prop}]`).innerText = data;	  
+	      document.querySelector(`[data-prop='${prop}']`).innerText = data;	  
 	    }
 	    if(key === 'rules'){
 	      Object.keys((server.rules)).forEach((rule) => { mapData(rule, server.rules[rule]); });
@@ -757,31 +765,33 @@ var Server = function(configuration = {}){
   }
   var addServerToList = (server) => {	
 	if(filters.test(server)){ 
-	
 	  ui.servers.appendChild(createLI(server));
 	}
+	else { console.log("You've lost the game");}
   };
   var addServersToList = (serverList) => {
-    var tmp = serverList.length;//sort(function(a,b){ return a.name.localeCompare(b.name,"en-US-u-kn-true");}
+    serverList.sort((a,b) => a.name.localeCompare(b.name,"en-US-u-kn-true"));
+	//console.log('sl:', serverList);
 	
     var currentList = Array.from(document.querySelectorAll('#hosts li')).map((li)=> li.dataset.name),
 	    newList = serverList.map((server) => server.name);
 			
-	var additions = newList.filter((id) => !currentList.includes(id)),
+	var additions = newList.filter((id) => { return !currentList.includes(id) && filters.test(serverList.find((server) => server.name == id));}),
 	    removals = currentList.filter((id) => !newList.includes(id));
 		
 	var parent = ui.servers;
 	
 	//console.log('additions:',additions);
-	//console.log('removals: ', removals);
+	//console.log('removals: ', removals.length);
 	
 	additions.forEach((id) => {
 	  if(!parent.hasChildNodes()){ addServerToList( serverList.find((server) => server.name == id) ); }
 	  else {
 	    var idx = newList.indexOf(id),
-		    prevElement = Array.from(parent.childNodes).find((element) => element.dataset.name == newList[idx - 1]);// doesn't work bc new list will have things in a different order
-					
-		parent.insertBefore(createLI(serverList[idx]), prevElement.nextSibling);
+	        prevElement = Array.from(parent.childNodes).find((element) => element.dataset.name == newList[idx - 1]);// doesn't work bc new list will have things in a different order
+	  			
+	    if(prevElement == null){ parent.insertBefore(createLI(serverList[idx]), parent.firstChild); }
+	    else { parent.insertBefore(createLI(serverList[idx]), prevElement.nextSibling); }
 	  }
 	});
 	removals.forEach((id)=> parent.removeChild(parent.querySelector(`li[data-name='${id}']`)));
