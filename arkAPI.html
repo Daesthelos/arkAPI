@@ -15,9 +15,9 @@ body {
   background-color:rgb(45,48,55);
   font-family: "Times New Roman", Georgia, Serif; /*Garamond*/
 }
-label:after{
+/*label:after{
   content: ": ";
-}
+}*/
 .grid *{
   box-sizing:border-box;
 }
@@ -536,7 +536,7 @@ var Server = function(configuration = {}){
     map : setDefault(configuration.map, "---"),
 	playerCount : (configuration.hasOwnProperty('players')) ? configuration.players.length : "---",
 	maxPlayers : setDefault(configuration.maxplayers, "---"),
-	players : "---", //setDefault(configuration.players, "---"), Currently not handled properly
+	players : "---", //setDefault(configuration.players, "---"), Currently not handled properly. Wonder if I should append them into a ul
 	rules : {
 	  hasCharacterDownloads : "---",
 	  hasItemDownloads : "---",
@@ -573,11 +573,12 @@ var Server = function(configuration = {}){
   return server;
 };
 
-(function(){
+var viewModel = (()=>{
   var _vm = new Observable({
     tabID : 0,
 	serverID : 0,
 	servers : new Observe([]),
+	hosts : [],
   }),
 	_hosts = [];
   
@@ -675,6 +676,7 @@ var Server = function(configuration = {}){
   _vm.subscribe('change/tabID', (tabID) => displayTab(tabID.new));
   _vm.subscribe('change/serverID', (serverID) => displayServerInfo(serverID.new));
   _vm.servers.subscribe('change', (server) => addServersToList(server.new)); //{ old: [], new : [Server,Server,Server]}
+  _vm.subscribe('change/hosts', (hosts) => queryServers(hosts.new));
   
   model.subscribe('change/version', (version) => updateVersion(version.new));
   model.subscribe('change/news', (news) => displayNews(news.new));
@@ -763,6 +765,10 @@ var Server = function(configuration = {}){
 	  throw new Error("Server not found.");
 	}
   }
+  var queryServers = (ipList) => {  	
+	document.querySelector(".loadingSpan").classList.add("loading");
+	loadServers();
+  };
   var addServerToList = (server) => {	
 	if(filters.test(server)){ 
 	  ui.servers.appendChild(createLI(server));
@@ -808,11 +814,11 @@ var Server = function(configuration = {}){
   };
   
   var loadServers = () => {
-    if(!_hosts.length){
+    if(!_vm.hosts.length){
 	  ui.loadingSpan.classList.remove('loading');
 	  ui.loadingSpan.classList.add('done');
 	} else {
-	  var ip = _hosts.shift();
+	  var ip = _vm.hosts.shift();
 	  rsc.serverInfo(ip).then(x=>{
 	    //vm.data.servers.sort((y,z) => y.name.localeCompare(z.name,"en-US-u-kn-true"));
 		model.servers.add(new Server(x.value));
@@ -822,6 +828,8 @@ var Server = function(configuration = {}){
 	}
   };
   
+  return _vm;
+})();  
   function promiseTimer(promise, ms, message){ 
     var timeout = new Promise((resolve,reject) => {
 		var id = setTimeout(()=> { 
@@ -832,77 +840,27 @@ var Server = function(configuration = {}){
 	
 	return Promise.race([promise,timeout]);
  }
-  
-  /*Data loading*/
   //VERSION/MAJOR VERSION: There's a seperate resource for major version, but I don't see the need to get both.
+  //promiseTimer(rsc.majorVersion(), 60000, "Major version info failed to load.").then(x=>{}).catch(x=> {console.log(x); vm.majVersion.ui.innerText = "unavailable"; });
   promiseTimer(rsc.version(), 60000, "Version info failed to load.")
 	.then(x=> model.version = x.value)
 	.catch(x=> {console.log(x); ui.version.innerText = "unavailable"; ui.majorVersion.innerText = "unavailable"; });
-  //promiseTimer(rsc.majorVersion(), 60000, "Major version info failed to load.").then(x=>{}).catch(x=> {console.log(x); vm.majVersion.ui.innerText = "unavailable"; });
   //SERVER STATUS
   promiseTimer(rsc.serverStatus(), 60000, "Server status failed to load.")
-  .then(x=> model.serverStatus = x.value )
-  .catch(x=> {console.log(x); vm.serverStatus.addStatus("Server status unavailable."); });	
+    .then(x=> model.serverStatus = x.value )
+    .catch(x=> {console.log(x); model.serverStatus = "Server status unavailable."; });	
   //NEWS
   promiseTimer(rsc.news(), 60000, "News failed to load.")
 	.then(x=> model.news = x.value )
-	.catch(y=> {console.log(y); vm.news.addNewsItem("News unavailable."); });
+	.catch(y=> {console.log(y); model.news = "Unavailable." });	
   //HOSTS
   promiseTimer(rsc.hosts(), 60000, "Host list failed to load.").then(x=> {
-	  _hosts = x.value.split(rsc.utils.regex.newlines).reduce((y,z) => {
+	  vm.hosts = x.value.split(rsc.utils.regex.newlines).reduce((y,z) => {
 	    var ip = z.match(rsc.utils.regex.ip);
 		if(ip){ y.push(z.match(rsc.utils.regex.ip)[0]); }
 		return y;
 	  }, []);
-	
-	  document.querySelector(".loadingSpan").classList.add("loading");
-	  loadServers();
-    }).catch(a=> {console.log(a); alert("Server list unavailable."); });	
-  					
-  var vm = {
-	hosts : {
-	  ui : document.getElementById("hosts"),
-	  addServer : function(server){
-	    var li = document.createElement("li");
-		li.dataset.name = server.name;
-		li.innerText = server.name;
-		li.onclick = displayServerInfo;
-		
-		if(vm.filter.conditions.length){
-		  if(!vm.filter.test(server)){
-		    return;
-		  }
-		}
-		
-		//Do index based insertion if children
-		if(vm.hosts.ui.children.length){
-		  var serverNames = vm.data.servers.map(function(s){ return s.name });
-		  var idx = serverNames.indexOf(server.name);
-		  //Error: server not found or last item
-		  if(idx == -1 || idx == serverNames.length - 1){
-		    vm.hosts.ui.appendChild(li);
-		  } else {
-		    var liServers = Array.from(vm.hosts.ui.children);
-			var elAfter = liServers.find(x=> x.dataset.name == serverNames[idx+1]);
-		    vm.hosts.ui.insertBefore(li, elAfter);
-		  }
-		} else {
-		  vm.hosts.ui.appendChild(li);
-		}
-	  },
-	  reloadServers : function(servers){
-	    vm.hosts.ui.innerHTML = "";
-		if(servers){
-		  servers.forEach(x=> vm.hosts.addServer(x));
-		} else {
-		  vm.data.servers.forEach(x=> vm.hosts.addServer(x));
-		}
-	  },
-	},
-  };
-})();
-
-
+  }).catch(a=> {console.log(a); alert("Server list unavailable."); });	
 </script>
 </body>
 </html>
