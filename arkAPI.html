@@ -844,7 +844,11 @@ var viewModel = (()=>{
   //promiseTimer(rsc.majorVersion(), 60000, "Major version info failed to load.").then(x=>{}).catch(x=> {console.log(x); vm.majVersion.ui.innerText = "unavailable"; });
   promiseTimer(rsc.version(), 60000, "Version info failed to load.")
 	.then(x=> model.version = x.value)
-	.catch(x=> {console.log(x); ui.version.innerText = "unavailable"; ui.majorVersion.innerText = "unavailable"; });
+	.catch(x=> {
+	  console.log(x); 
+	  document.querySelector('#version').innerText = "unavailable";
+	  document.querySelector('#majorVersion').innerText = "unavailable";
+	});
   //SERVER STATUS
   promiseTimer(rsc.serverStatus(), 60000, "Server status failed to load.")
     .then(x=> model.serverStatus = x.value )
