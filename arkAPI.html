@@ -859,7 +859,7 @@ var viewModel = (()=>{
 	.catch(y=> {console.log(y); model.news = "Unavailable." });	
   //HOSTS
   promiseTimer(rsc.hosts(), 60000, "Host list failed to load.").then(x=> {
-	  vm.hosts = x.value.split(rsc.utils.regex.newlines).reduce((y,z) => {
+	  viewModel.hosts = x.value.split(rsc.utils.regex.newlines).reduce((y,z) => {
 	    var ip = z.match(rsc.utils.regex.ip);
 		if(ip){ y.push(z.match(rsc.utils.regex.ip)[0]); }
 		return y;
