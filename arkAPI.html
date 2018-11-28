@@ -165,55 +165,87 @@ a[href*="https://www.000webhost.com/"]{
 </head>
 <body>
 <script>
-var ajax = (()=>{
-  var isJSON = (str) => { 
-    var output = {isValid:true, value:str};
-	try 	  { output.value = JSON.parse(str);}
-	catch (e) { output.isValid = false; }
-	return output;
-  };  
-  var unwrap = (obj) => {
-    if(typeof obj != 'object'){ return obj;}
-	return (()=>{ 
-	  var rewrite = {};
-	  Object.keys(obj).forEach(x=> rewrite[x] = obj[x]);
-	  return rewrite;
-	})();
-  };
-  var compress = (xhr) => { 
-	return {
-	  value : xhr.response,
-	  status: xhr.stauts,
-	  statusText: xhr.statusText
-	};
-  };
-  var parseXHR = (xhr,ref) => {
-    xhr = unwrap(xhr);
-	xhr.response = isJSON(ref.response).value;
-	xhr.responseText = isJSON(ref.responseText).value;
-	return xhr;
-  };
+
+
+
+
+var d = (function(){
+  var functionMap = Object.create(null);
   
+  function defineFunction(name,func){
+    if(name == null){ throw new Error("Function name required"); }
+	else if(typeof name != "string"){ throw new Error("Function name must be a string."); }
+	else if(func != null && typeof func != "function"){ throw new Error("Function must be of type function if supplied"); }
+	
+	functionMap[name] = func;
+  }
+  
+  function requireFunction(name){
+    if(typeof name != "string"){ throw new Error("Function name required"); }
+    return functionMap[name] !== undefined ? functionMap[name] : null;
+  }
+  
+  return {
+    define : defineFunction,
+	require: requireFunction,
+  };
+})();
+
+var d_tests = (function(){
+  function testDefineBadName(){}
+  function testDefineNoFunc(){}
+  function testRequireNoName(){}
+  function testRequireNoFunc(){}
+  
+  return { 
+    execute : function(){
+      testDefineBadName();
+      testDefineNoFunc();
+      testRequireNoName();
+	  testRequireNoFunc();
+	}
+  };
+})();
+
+var ajax = (()=>{
+  var tryParseJSON = function(input){ 
+    try{ return JSON.parse(input);}
+	catch{ return input; }
+  };
+
   //Todo: refactor into something that accepts an ajax options object.
-  var send = (method,url,data,headers,async) => {
+  // send = (method,url,data,headers,async)
+  var send = (method,url) => { 
+    var STATUS_CODE = {
+	  OK : 200,
+	  MULTIPLE_CHOICES : 300,
+	};
+  
     return new Promise((resolve, reject) => {
 	  var xhr = new XMLHttpRequest();
 	  xhr.onload = function(){
-	      xhr = compress(parseXHR(xhr,this));
-		  (this.status >= 200 && this.status < 300) ? resolve(xhr) : reject(xhr);
+	      var response = {
+		    status : {
+			  code : xhr.status,
+			  text : xhr.statusText,
+			},
+			value : tryParseJSON(xhr.response),
+		  };
+		  
+		  if(this.status >= STATUS_CODE.OK && this.status < STATUS_CODE.MULTIPLE_CHOICES){ resolve(response); } 
+		  else { reject(response); }
 	  };
-	  async = (async == undefined) ? true : async;
-	  xhr.onerror = () => { reject(this); };
-	  xhr.open(method,url,async);
-	  if(headers && Array.isArray(headers)){ headers.forEach(x=> xhr.setRequestHeader(x.header,x.value)); }
-	  xhr.send(data);
+	  xhr.onerror = function(){ reject(this); };
+	  xhr.open(method,url);
+	  //if(headers && Array.isArray(headers)){ headers.forEach(x=> xhr.setRequestHeader(x.header,x.value)); }
+	  xhr.send();
 	});
   };
   
   return {
     get : function(url){ return send("GET",url); },
 	//put(url,data) { return send("PUT",url); },
-	post: function(url,data,headers){ return send("POST",url,data,headers); }
+	//post: function(url,data,headers){ return send("POST",url,data,headers); }
 	//'delete' : (url) => { return send("DELETE",url); }
   };
 })();
