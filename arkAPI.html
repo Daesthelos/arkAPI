@@ -238,7 +238,7 @@ var ajax = (()=>{
 	  xhr.onerror = function(){ reject(this); };
 	  xhr.open(method,url);
 	  //if(headers && Array.isArray(headers)){ headers.forEach(x=> xhr.setRequestHeader(x.header,x.value)); }
-	  xhr.send();
+	  xhr.send();//accepts data, optionally
 	});
   };
   
@@ -249,51 +249,51 @@ var ajax = (()=>{
 	//'delete' : (url) => { return send("DELETE",url); }
   };
 })();
+
 function Publisher(){
   if(!(this instanceof Publisher)){
     throw new Error('Publisher is a constructor and must be called with the new keyword.');
   }
   
-  var actionEvents = {};
+  var eventMap = {};
   
-  var subscribe = (actionEvent, subscriber) => {
-    if(actionEvent == null){ throw new Error('Action event must be specified.'); }
+  var subscribeToEvent = (name, subscriber) => {
+    if(name == null){ throw new Error('Event must be specified.'); }
 	else if(subscriber == null) { throw new Error('Subscription function must be specified.'); }
-	else if(typeof actionEvent != "string"){ throw new TypeError('Action event must be a string.'); }
+	else if(typeof name != "string"){ throw new TypeError('Event must be a string.'); }
 	else if(typeof subscriber != 'function'){ throw new TypeError('Subscriber must be of type function.'); }
 	
-	if(actionEvents[actionEvent] == null){
-	  actionEvents[actionEvent] = [];
+	if(eventMap[name] == null){ 
+	  eventMap[name] = []; 
 	}
 	
-	var index = actionEvents[actionEvent].push(subscriber) - 1;
+	var index = eventMap[name].push(subscriber) - 1;
 	return { index : index };		
   }
   
-  var unsubscribe = (actionEvent, index) => {
-    if(actionEvents[actionEvent] != null && isFinite(index)){
-	  try {
-	    delete actionEvents[actionEvent][index];
-	  } catch(e) {
-	    throw new Error("Error occured while unsubscribing.");
-	  }
-	} else {
-	  throw new Error("Action event does not exist or index is out of range.");
-	}
+  var unsubscribeFromEvent = (name, index) => {
+    if(name == null){ throw new Error("Event must be specified"); }
+    else if(typeof name != "string"){ throw new Error("Event must be a string");}
+	else if(typeof index != "number" || !isFinite(index) || index < 0){ throw new Error("Index must be a finite, positive number"};
+    
+    if(eventMap[name] == null){ throw new Error("Event does not exist"); }
+	if(eventMap[name].length <= index){ throw new Error("Index out of range"); }
+     
+	delete eventMap[name][index];
   }
   
-  function publish(actionEvent, eventInfo){
-    if(actionEvent == null){ throw new Error('Action event must be specified.'); }
-	else if(typeof actionEvent != "string"){ throw new TypeError('Action event must be a string.'); }
+  function publishEventInfo(name, info){
+    if(name == null){ throw new Error('Action event must be specified.'); }
+	else if(typeof name != "string"){ throw new TypeError('Action event must be a string.'); }
 	
-    if(actionEvents[actionEvent] != null){
-	  actionEvents[actionEvent].forEach((subscriber)=> subscriber(eventInfo) );
+    if(eventMap[name] != null){
+	  eventMap[name].forEach((subscriber)=> subscriber(eventInfo) );
 	}
   }
   
-  this.subscribe = subscribe;
-  this.unsubscribe = unsubscribe;
-  this.publish = publish;
+  this.subscribe = subscribeToEvent;
+  this.unsubscribe = unsubscribeFromEvent;
+  this.publish = publishEventInfo;
 }
 
 function Observable(observer){
