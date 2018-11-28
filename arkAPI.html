@@ -235,7 +235,16 @@ var ajax = (()=>{
 		  if(this.status >= STATUS_CODE.OK && this.status < STATUS_CODE.MULTIPLE_CHOICES){ resolve(response); } 
 		  else { reject(response); }
 	  };
-	  xhr.onerror = function(){ reject(this); };
+	  xhr.onerror = function(){
+		var response = {
+		    status : {
+			  code : xhr.status,
+			  text : xhr.statusText,
+			},
+			value : tryParseJSON(xhr.response),
+		  };
+		reject(response);
+	  };
 	  xhr.open(method,url);
 	  //if(headers && Array.isArray(headers)){ headers.forEach(x=> xhr.setRequestHeader(x.header,x.value)); }
 	  xhr.send();//accepts data, optionally
@@ -296,13 +305,12 @@ function Publisher(){
   this.publish = publishEventInfo;
 }
 
-function Observable(observer){
+function Observable(subject){
   if(!(this instanceof Observable)){
     throw new Error('Observable is a constructor and must be called with the new keyword.');
   }
   
-  var publisher = new Publisher(),
-      _observable = this;
+  var publisher = new Publisher();
 
   var setPrivateValue = (property, value) => {
     this['_' + property] = value;
@@ -312,8 +320,8 @@ function Observable(observer){
   }
   
   var externalInterface = {};
-  Object.keys(observer).forEach((key)=>{
-    setPrivateValue(key, observer[key]);
+  Object.keys(subject).forEach((key)=>{
+    setPrivateValue(key, subject[key]);
 	externalInterface[key] = {
 	  get(){ return getPrivateValue(key); },
 	  set(value){
@@ -555,6 +563,43 @@ var model = new Observable({
 Object.defineProperty(model, 'majorVersion', {get(){ return parseInt(this.version).toFixed(0); }}); //Can only retrieve initial version of version otherwise, for some reason.
 //Array.push/pop/shift/unshift doesn't trigger change
 model.servers.add = oarrAdd;
+
+var _Server = function(configuration = {}){
+  if(!(this instanceof _Server)){
+    throw new Error("Server is a constructor and must be called with the new keyword.");
+  }
+  var setDefault = (val, defaultValue) => { return val === undefined ? defaultValue : val; }
+  var query = (function(hasConfig){
+    return {
+	  address : hasConfig ? setDefault(configuration.query.address, null) : null,
+	  port : hasConfig ? setDefault(configuration.query.port, null) : null,
+	};
+  })(configuration.hasOwnProperty("query"));
+  
+  
+  this.name = setDefault(configuration.name, null);
+  this.address = (query.address && query.port) ? (query.address + ":" + port) : null;
+  this.map = setDefault(configuration.map, null);
+  this.players = setDefault(configuration.players, []);
+  Object.defineProperty(this, 'playerCount', { get(){ return this.players.length; } });
+  this.maxPlayers = setDefault(configuration.maxplayers, null);
+  this.rules = (function(hasRules){
+    return {
+	  hasCharacterDownloads: hasRules ? setDefault( Boolean(parseInt( configuration.raw.rules.ALLOWDOWNLOADCHARS_i ))  ,null) : null, 	//Because boolean flags are such a great idea vs true/false
+	  hasItemDownloads: 	 hasRules ? setDefault( Boolean(parseInt( configuration.raw.rules.ALLOWDOWNLOADITEMS_i )) ,null)  : null, 	//No really, boolean flags are the way of the future :/
+	  hasPassword: 			 hasRules ? setDefault( configuration.raw.rules.ServerPassword_b ,null)                           : null, 	//But yeah, let's use true/false here because CONSISTENCY
+	  clusterID: 			 hasRules ? setDefault( configuration.raw.rules.clusterID_s ,null)                                : null,  //s stands for string
+	  time:                  hasRules ? setDefault( Number(configuration.raw.rules.DayTime_s) ,null)                          : null, 	//Because naturally numbers should be strings. Wait, Integers are a thing?
+	  isLegacy:				 hasRules ? setDefault( Boolean(parseInt( configuration.raw.rules.LEGACY_i)) ,null)               : null, 	//Here I go flagging again!
+	  timeout:               hasRules ? setDefault( null ,null)                                                               : null, 	//TODO: Figure out why I never assigned timeout
+	  mods:                  hasRules ? setDefault( configuration.raw.rules.ModId_l ,null)                                    : null, 	//l? list? Hell if I know
+	  isOfficial:            hasRules ? setDefault( Boolean(parseInt( configuration.raw.rules.OFFICIALSERVER_i)) ,null)       : null,	//Booooo, I'm a boooolean flag
+	  hasBattleEye:          hasRules ? setDefault( configuration.raw.rules.SERVERUSESBATTLEYE_b ,null)                       : null,  //Aaaaand back to true/false. I'm so random <3
+	  isPvE:                 hasRules ? setDefault( Boolean(parseInt( configuration.raw.rules.SESSIONISPVE_i)) ,null)         : null,  //One final flip-flop to flags <3 
+	};
+  })(configuration.hasOwnProperty("raw") && configuration.raw.hasOwnProperty("rules"));
+}
+
 
 var Server = function(configuration = {}){
   if(!(this instanceof Server)){
