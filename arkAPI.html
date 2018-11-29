@@ -244,65 +244,7 @@ var _Server = function(configuration = {}){
   })(configuration.hasOwnProperty("raw") && configuration.raw.hasOwnProperty("rules"));
 }
 
-
-var Server = function(configuration = {}){
-  if(!(this instanceof Server)){
-    throw new Error("Server is a constructor and must be called with the new keyword.");
-  }
-  
-  var setDefault = (val, defaultValue) => { return val === undefined ? defaultValue : val; }
-  var server = {
-  	name : setDefault(configuration.name, "---"),
-	get address(){ return "---"; },
-    map : setDefault(configuration.map, "---"),
-	playerCount : (configuration.hasOwnProperty('players')) ? configuration.players.length : "---",
-	maxPlayers : setDefault(configuration.maxplayers, "---"),
-	players : "---", //setDefault(configuration.players, "---"), Currently not handled properly. Wonder if I should append them into a ul
-	rules : {
-	  hasCharacterDownloads : "---",
-	  hasItemDownloads : "---",
-	  hasPassword : "---",
-	  clusterID : "---",
-	  time : "---",
-	  isLegacy : "---",
-	  timeout : "---",
-	  mods: "---",
-	  isOfficial : "---",
-	  hasBattleEye : "---",
-	  isPvP : "---",
-	},
-  };
-  
-  if(configuration.hasOwnProperty('query') && configuration.query.address && configuration.query.port){
-    Object.defineProperty(server,'address',{ get(){ return configuration.query.address + ":" + configuration.query.port; }});
-  }
-  
-  if(configuration.hasOwnProperty("raw") && configuration.raw.hasOwnProperty("rules")){
-    var configRules = configuration.raw.rules;
-	if(configRules.hasOwnProperty('ALLOWDOWNLOADCHARS_i')){ server.rules.hasCharacterDownloads = Boolean(parseInt(configRules.ALLOWDOWNLOADCHARS_i));}
-	if(configRules.hasOwnProperty('ALLOWDOWNLOADITEMS_i')){ server.rules.hasItemDownloads      = Boolean(parseInt(configRules.ALLOWDOWNLOADITEMS_i));}
-	if(configRules.hasOwnProperty('ServerPassword_b'))    { server.rules.hasPassword           = configRules.ServerPassword_b; }
-	if(configRules.hasOwnProperty('ClusterId_s'))		  { server.rules.clusterID		       = configRules.ClusterId_s;}
-	if(configRules.hasOwnProperty('DayTime_s'))		  	  { server.rules.time 				   = Number(configRules.DayTime_s);}
-	if(configRules.hasOwnProperty('LEGACY_i'))		  	  { server.rules.isLegacy 			   = Boolean(parseInt(configRules.LEGACY_i));}
-	if(configRules.hasOwnProperty('ModId_l'))		  	  { server.rules.mods 				   = configRules.ModId_l;}
-	if(configRules.hasOwnProperty('OFFICIALSERVER_i'))	  { server.rules.isOfficial 		   = Boolean(parseInt(configRules.OFFICIALSERVER_i));}
-	if(configRules.hasOwnProperty('SERVERUSESBATTLEYE_b')){ server.rules.hasBattleEye 		   = configRules.SERVERUSESBATTLEYE_b;}
-	if(configRules.hasOwnProperty('SESSIONISPVE_i'))	  { server.rules.isPvP 				   = !Boolean(parseInt(configRules.SESSIONISPVE_i));}
-  }
-  
-  return server;
-};
-
-var viewModel = (()=>{
-  var _vm = new Observable({
-    tabID : 0,
-	serverID : 0,
-	servers : new Observe([]),
-	hosts : [],
-  }),
-	_hosts = [];
-  
+var view = (function(){
   var ui = {
     navItems : document.querySelectorAll('.nav-item[data-index]'),
 	tabs : document.querySelectorAll('.tab[data-index]'),
@@ -334,6 +276,20 @@ var viewModel = (()=>{
 	  timeout : document.querySelector('#timeout'),
 	},
   };
+
+  
+  
+  return ui;
+})();
+
+var viewModel = (()=>{
+  var _vm = new Observable({
+    tabID : 0,
+	serverID : 0,
+	servers : new Observe([]),
+	hosts : [],
+  }),
+	_hosts = [];
   
   //Filters - vm specific model data.
   //It's fine for props not to be observable, just have to be careful to explicitly set them
