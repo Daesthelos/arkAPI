@@ -151,6 +151,43 @@
 </div>
 
 <script>
+var view = (function(){
+  //TODO: I probably should find a way to assign data without all these id's
+  var ui = {
+    navItems : document.querySelectorAll('.nav-item[data-index]'),
+	tabs : document.querySelectorAll('.tab[data-index]'),
+	version : document.querySelector('#version'),
+	majorVersion : document.querySelector('#majorVersion'),
+	serverStatus : document.querySelector('#serverStatus'),
+	news : document.querySelector('#news'),
+	loadingSpan : document.querySelector(".loadingSpan"),
+	servers: document.querySelector('#hosts'),
+	filters : {
+	  maps : document.querySelectorAll('#maps input[type="checkbox"]'),
+	  modes: document.querySelectorAll('#gameModes input[type="checkbox"]'),
+	  custom: document.querySelector('#txtFind'),
+	},
+	serverInfo : {
+	  name : document.querySelector('#serverName'),
+	  clusterID : document.querySelector('#clusterID'),
+	  serverLink : document.querySelector('#serverLink'),
+	  hasPassword : document.querySelector('#passwordRequired'),
+	  map : document.querySelector('#map'),
+	  isPvE : document.querySelector('#isPvE'),
+	  isOfficial : document.querySelector('#isOfficial'),
+	  hasBattleEye : document.querySelector('#usesBattleEye'),
+	  playerCount : document.querySelector('#playerCount'),
+	  players : document.querySelector('#players'),
+	  hasCharacterDownloads : document.querySelector('#playerDownloadsAllowed'),
+	  hasItemDownloads : document.querySelector('#itemDownloadsAllowed'),
+	  time : document.querySelector('#daytime'),
+	  timeout : document.querySelector('#timeout'),
+	},
+  };
+
+  return ui;
+})();
+
 var rsc = (function(){
   var proxy = "https://cors-anywhere.herokuapp.com/",
       routes = {
@@ -195,7 +232,7 @@ var rsc = (function(){
 
 var oarrAdd = function(item){ 
   var idx = this().push(item) - 1;
-  this.publish('change/add', { index : idx, value : item });
+  this.publish('change/add', item );
 };
 
 var model = (function(){ 
@@ -246,51 +283,13 @@ var Server = function(configuration = {}){
   })(configuration.hasOwnProperty("raw") && configuration.raw.hasOwnProperty("rules"));
 }
 
-var view = (function(){
-  //TODO: I probably should find a way to assign data without all these id's
-  var ui = {
-    navItems : document.querySelectorAll('.nav-item[data-index]'),
-	tabs : document.querySelectorAll('.tab[data-index]'),
-	version : document.querySelector('#version'),
-	majorVersion : document.querySelector('#majorVersion'),
-	serverStatus : document.querySelector('#serverStatus'),
-	news : document.querySelector('#news'),
-	loadingSpan : document.querySelector(".loadingSpan"),
-	servers: document.querySelector('#hosts'),
-	filters : {
-	  maps : document.querySelectorAll('#maps input[type="checkbox"]'),
-	  modes: document.querySelectorAll('#gameModes input[type="checkbox"]'),
-	  custom: document.querySelector('#txtFind'),
-	},
-	serverInfo : {
-	  name : document.querySelector('#serverName'),
-	  clusterID : document.querySelector('#clusterID'),
-	  serverLink : document.querySelector('#serverLink'),
-	  hasPassword : document.querySelector('#passwordRequired'),
-	  map : document.querySelector('#map'),
-	  isPvE : document.querySelector('#isPvE'),
-	  isOfficial : document.querySelector('#isOfficial'),
-	  hasBattleEye : document.querySelector('#usesBattleEye'),
-	  playerCount : document.querySelector('#playerCount'),
-	  players : document.querySelector('#players'),
-	  hasCharacterDownloads : document.querySelector('#playerDownloadsAllowed'),
-	  hasItemDownloads : document.querySelector('#itemDownloadsAllowed'),
-	  time : document.querySelector('#daytime'),
-	  timeout : document.querySelector('#timeout'),
-	},
-  };
-
-  return ui;
-})();
-
 var viewModel = (()=>{
   var _vm = new Observable({
     tabID : -1,
 	serverID : 0,
 	servers : new Observe([]),
 	hosts : [],
-  }),
-	_hosts = [];
+  });
   
   //Filters - vm specific model data.
   //It's fine for props not to be observable, just have to be careful to explicitly set them
@@ -359,7 +358,7 @@ var viewModel = (()=>{
   model.subscribe('change/version', (version) => vmEvents.updateVersion(version.new));
   model.subscribe('change/news', (news) => vmEvents.displayNews(news.new));
   model.subscribe('change/serverStatus', (serverStatus) => vmEvents.displayStatus(serverStatus.new));
-  model.servers.subscribe('change/add', (server) => _vm.servers(_vm.servers().concat(server.value)));// model -> filter -> vm -> ui
+  model.servers.subscribe('change/add', (server) => _vm.servers(_vm.servers().concat(server)));// model -> filter -> vm -> ui
   
   filters.subscribe('change/maps', (map) => filters.update('maps'));
   filters.subscribe('change/modes', (mode) => filters.update('modes'));
@@ -458,12 +457,10 @@ var viewModel = (()=>{
 	displayServerInfo(serverID){
 	  var server = model.servers().find((server) => server.name == serverID)
       if(server){  
-	    console.log(server.players);
+	    //console.log(server.players);
 	    Object.keys(server).forEach((key) => {  
 	      function mapData(prop, data){
-		    try {
-	          document.querySelector(`[data-prop='${prop}']`).innerText = data;	  
-			} catch(err){console.log(prop); }
+	        document.querySelector(`[data-prop='${prop}']`).innerText = data;	  
 	      }
 	      if(key === 'rules'){
 	        Object.keys((server.rules)).forEach((rule) => { mapData(rule, server.rules[rule]); });
